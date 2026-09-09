@@ -22,7 +22,7 @@
       "output": "release",
       "buildResources": "build"
     },
-    "files": ["dist-electron/**/*", "dist/**/*", "package.json"],
+    "files": ["dist-electron/**/*", "dist/**/*", "package.json", "build/icon.png"],
     "win": {
       "target": ["nsis"],
       "icon": "build/icon.ico"
