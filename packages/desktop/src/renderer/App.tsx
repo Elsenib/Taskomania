@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "./auth/AuthContext";
 import AuthScreen from "./auth/AuthScreen";
 import Board from "./board/Board";
@@ -6,12 +6,23 @@ import GraphView from "./graph/GraphView";
 import InviteModal from "./components/InviteModal";
 import StartupAnimation from "./components/StartupAnimation";
 
+// Matches startup-animation.mp4's own length — the video should always play
+// through in full, never get cut off early just because the backend (often
+// woken from a Railway sleep) happened to respond before it finished.
+const STARTUP_ANIMATION_MIN_MS = 8000;
+
 export default function App() {
   const { user, loading, connectionError, retryConnection, logout } = useAuth();
   const [viewMode, setViewMode] = useState<"board" | "graph">("board");
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [minAnimationElapsed, setMinAnimationElapsed] = useState(false);
 
-  if (loading) {
+  useEffect(() => {
+    const timer = setTimeout(() => setMinAnimationElapsed(true), STARTUP_ANIMATION_MIN_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (loading || !minAnimationElapsed) {
     return <StartupAnimation />;
   }
 
