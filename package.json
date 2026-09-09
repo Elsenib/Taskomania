@@ -11,8 +11,11 @@
     "dev:server": "npm run dev --workspace=@team-tracker/server",
     "dev:desktop": "npm run dev --workspace=@team-tracker/desktop",
     "build:shared": "npm run build --workspace=@team-tracker/shared",
+    "build:server": "npm run build --workspace=@team-tracker/server",
+    "start": "npm run prisma:deploy --workspace=@team-tracker/server && npm run start --workspace=@team-tracker/server",
     "prisma:generate": "npm run prisma:generate --workspace=@team-tracker/server",
-    "prisma:migrate": "npm run prisma:migrate --workspace=@team-tracker/server"
+    "prisma:migrate": "npm run prisma:migrate --workspace=@team-tracker/server",
+    "prisma:deploy": "npm run prisma:deploy --workspace=@team-tracker/server"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
