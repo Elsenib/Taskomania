@@ -8,4 +8,8 @@ contextBridge.exposeInMainWorld("teamTracker", {
   // Brings the window forward when the user clicks a native notification —
   // needed because the window may be hidden to the tray or unfocused.
   focusWindow: () => ipcRenderer.send("focus-window"),
+  // The window has no native close button (fullscreen, no frame) — these
+  // back the in-app power menu's two options.
+  sleepApp: () => ipcRenderer.send("app-sleep"),
+  shutdownApp: () => ipcRenderer.send("app-shutdown"),
 });

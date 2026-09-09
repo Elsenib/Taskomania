@@ -21,6 +21,42 @@
   --priority-high-dot: #ff3b30;
 }
 
+/* Dark mode — follows the OS theme automatically (no in-app toggle). Same
+   layout/structure throughout the app; only these tokens change. Palette
+   sampled directly from startup-animation.mp4 (deep navy background, bright
+   cyan accent) rather than a generic dark-grey theme, so the app doesn't
+   visually jump between the startup video and the rest of the UI. Priority
+   colors use Apple's own dark-mode system-color adjustments (brighter than
+   their light-mode counterparts, needed for contrast on a dark background). */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #eef4fa;
+    --ink-soft: #b8c7d9;
+    --paper: #0a1628;
+    --paper-panel: #0f2038;
+    --card: #122844;
+    --border: rgba(140, 190, 255, 0.14);
+    --muted: #7d93ad;
+    --accent: #24e2fb;
+    --accent-hover: #4de8ff;
+    --accent-paper: rgba(36, 226, 251, 0.12);
+
+    --priority-low-ink: #32d74b;
+    --priority-low-dot: #32d74b;
+    --priority-medium-ink: #ff9f0a;
+    --priority-medium-dot: #ff9f0a;
+    --priority-high-ink: #ff453a;
+    --priority-high-dot: #ff453a;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.16);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -214,6 +250,9 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
+  /* Extra room on the right so header buttons don't sit under the fixed
+     power-menu button (top-right corner, present on every screen). */
+  padding-right: 60px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
 }
@@ -230,4 +269,24 @@ body {
   color: var(--muted);
   display: flex;
   align-items: center;
+}
+
+/* ---------- Power menu ---------- */
+
+.power-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.power-menu-item:hover {
+  background: var(--paper-panel);
 }

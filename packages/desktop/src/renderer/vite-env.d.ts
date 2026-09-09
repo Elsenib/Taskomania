@@ -12,5 +12,7 @@ interface Window {
   teamTracker: {
     version: string;
     focusWindow(): void;
+    sleepApp(): void;
+    shutdownApp(): void;
   };
 }

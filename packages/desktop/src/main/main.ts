@@ -26,6 +26,11 @@ function createWindow() {
     height: 800,
     title: "Taskomania",
     icon: iconPath,
+    // Fullscreen-only in production — in dev it fights the DevTools window
+    // (Windows keeps a fullscreen/exclusive window on top of everything
+    // else, DevTools included), so debugging stays in a normal window.
+    fullscreen: !isDev,
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -89,7 +94,22 @@ ipcMain.on("focus-window", () => {
   mainWindow?.focus();
 });
 
+// The window runs fullscreen with no frame/menu, so the renderer's own
+// power-button UI (PowerMenu.tsx) is the only way to close it — these are
+// its two options: hide to tray (socket stays connected) or fully quit.
+ipcMain.on("app-sleep", () => {
+  mainWindow?.hide();
+});
+ipcMain.on("app-shutdown", () => {
+  isQuitting = true;
+  app.quit();
+});
+
 app.whenReady().then(() => {
+  // No default "File Edit View Window Help" menu bar — the app runs
+  // fullscreen/kiosk-style with its own in-app controls only.
+  Menu.setApplicationMenu(null);
+
   createWindow();
   createTray();
 
