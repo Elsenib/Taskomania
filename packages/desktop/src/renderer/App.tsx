@@ -4,6 +4,7 @@ import AuthScreen from "./auth/AuthScreen";
 import Board from "./board/Board";
 import GraphView from "./graph/GraphView";
 import InviteModal from "./components/InviteModal";
+import StartupAnimation from "./components/StartupAnimation";
 
 export default function App() {
   const { user, loading, connectionError, retryConnection, logout } = useAuth();
@@ -11,11 +12,7 @@ export default function App() {
   const [inviteOpen, setInviteOpen] = useState(false);
 
   if (loading) {
-    return (
-      <div className="auth-shell">
-        <p style={{ color: "var(--muted)" }}>Yüklənir...</p>
-      </div>
-    );
+    return <StartupAnimation />;
   }
 
   if (connectionError) {
