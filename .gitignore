@@ -1,0 +1,20 @@
+node_modules/
+dist/
+dist-electron/
+build/
+release/
+.env
+*.log
+.DS_Store
+generated/
+uploads/
+
+# Claude Code's local session/tooling data (bundled skill library, plans,
+# etc.) — not project source, not meant to be shared in the app's repo.
+.claude/
+
+# electron-builder reads its icon/installer-bitmap inputs from this
+# conventionally-named "build/" folder — these are source assets, not
+# build output, so they're tracked despite the blanket rule above.
+!packages/desktop/build/
+!packages/desktop/build/**

@@ -1,0 +1,20 @@
+{
+  "name": "team-tracker",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/shared",
+    "packages/server",
+    "packages/desktop"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace=@team-tracker/server",
+    "dev:desktop": "npm run dev --workspace=@team-tracker/desktop",
+    "build:shared": "npm run build --workspace=@team-tracker/shared",
+    "prisma:generate": "npm run prisma:generate --workspace=@team-tracker/server",
+    "prisma:migrate": "npm run prisma:migrate --workspace=@team-tracker/server"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
