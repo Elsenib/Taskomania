@@ -4,6 +4,11 @@ import path from "path";
 const isDev = process.env.NODE_ENV === "development";
 const iconPath = path.join(__dirname, "../build/icon.png");
 
+// Chromium blocks audible autoplay without a prior user gesture — the
+// startup wake-up video needs sound to play from the very first launch,
+// before the user has clicked anything.
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+
 // Windows groups toast notifications by this id and uses it to pick the
 // taskbar/notification icon+name — without it, notifications show up as
 // generic "Electron" toasts instead of "Taskomania".
