@@ -92,6 +92,10 @@ export interface GraphData {
 // Socket.IO event payloads (server -> client), broadcast to room `team:<teamId>`
 export interface ServerToClientEvents {
   "column:created": (column: Column) => void;
+  // Broadcasts the full, freshly-renumbered list rather than a single column
+  // — reordering shifts every sibling's `order`, so this saves every other
+  // client a "which else changed?" round trip.
+  "column:reordered": (columns: Column[]) => void;
   "task:created": (task: Task) => void;
   "task:updated": (task: Task) => void;
   "task:deleted": (payload: { id: string }) => void;

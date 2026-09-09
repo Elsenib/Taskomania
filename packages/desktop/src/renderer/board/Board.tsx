@@ -8,7 +8,8 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { useColumns, useCreateColumn } from "../hooks/useColumns";
+import { SortableContext, arrayMove, horizontalListSortingStrategy } from "@dnd-kit/sortable";
+import { useColumns, useCreateColumn, useReorderColumn } from "../hooks/useColumns";
 import { useTasks, useUpdateTask } from "../hooks/useTasks";
 import { useTeamMembers } from "../hooks/useTeamMembers";
 import { useRealtimeSync } from "../hooks/useRealtimeSync";
@@ -38,6 +39,7 @@ export default function Board({ teamId }: { teamId: string }) {
   const { data: members } = useTeamMembers(teamId);
   const updateTask = useUpdateTask(teamId);
   const createColumn = useCreateColumn(teamId);
+  const reorderColumn = useReorderColumn(teamId);
 
   const openTaskId = useUiStore((s) => s.openTaskId);
   const newTaskColumnId = useUiStore((s) => s.newTaskColumnId);
@@ -90,6 +92,23 @@ export default function Board({ teamId }: { teamId: string }) {
     setActiveId(null);
     const { active, over } = event;
     if (!over) return;
+
+    if (active.data.current?.type === "column") {
+      if (active.id === over.id) return;
+      const activeColumnId = String(active.id).replace(/^col-/, "");
+      const overColumnId = String(over.id).replace(/^col-/, "");
+      const orderedIds = (columns ?? []).map((c) => c.id);
+      const oldIndex = orderedIds.indexOf(activeColumnId);
+      const newIndex = orderedIds.indexOf(overColumnId);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const reordered = arrayMove(orderedIds, oldIndex, newIndex);
+      const newPosition = reordered.indexOf(activeColumnId);
+      const afterColumnId = newPosition === 0 ? null : reordered[newPosition - 1];
+      reorderColumn.mutate({ columnId: activeColumnId, afterColumnId });
+      return;
+    }
+
     const taskId = String(active.id);
     const targetColumnId = String(over.id);
     const task = tasks?.find((t) => t.id === taskId);
@@ -159,16 +178,22 @@ export default function Board({ teamId }: { teamId: string }) {
         onDragCancel={() => setActiveId(null)}
       >
         <div className="thin-scroll" style={{ display: "flex", gap: 16, height: "100%", overflowX: "auto" }}>
-          {(columns ?? []).map((column, index) => (
-            <Column
-              key={column.id}
-              column={column}
-              tasks={visibleTasks.filter((t) => t.columnId === column.id)}
-              membersById={membersById}
-              onTake={column.name === "To Do" && takeColumn ? handleTake : undefined}
-              canAddTask={index === 0}
-            />
-          ))}
+          <SortableContext
+            items={(columns ?? []).map((c) => `col-${c.id}`)}
+            strategy={horizontalListSortingStrategy}
+          >
+            {(columns ?? []).map((column, index) => (
+              <Column
+                key={column.id}
+                column={column}
+                tasks={visibleTasks.filter((t) => t.columnId === column.id)}
+                membersById={membersById}
+                onTake={column.name === "To Do" && takeColumn ? handleTake : undefined}
+                canAddTask={index === 0}
+                canReorder={user?.role === "ADMIN"}
+              />
+            ))}
+          </SortableContext>
 
           {user?.role === "ADMIN" && (
             <div style={{ width: 220, flexShrink: 0 }}>

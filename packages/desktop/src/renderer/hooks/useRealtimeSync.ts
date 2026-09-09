@@ -35,6 +35,11 @@ export function useRealtimeSync(teamId: string) {
       invalidateGraph();
     };
 
+    const onColumnReordered = (_columns: Column[]) => {
+      queryClient.invalidateQueries({ queryKey: ["columns", teamId] });
+      invalidateGraph();
+    };
+
     const onTaskCreated = (task: Task) => {
       queryClient.setQueryData<{ tasks: Task[] }>(["tasks", teamId], (old) => {
         if (!old) return old;
@@ -140,6 +145,7 @@ export function useRealtimeSync(teamId: string) {
     };
 
     socket.on("column:created", onColumnCreated);
+    socket.on("column:reordered", onColumnReordered);
     socket.on("task:created", onTaskCreated);
     socket.on("task:updated", onTaskUpdated);
     socket.on("task:deleted", onTaskDeleted);
@@ -151,6 +157,7 @@ export function useRealtimeSync(teamId: string) {
 
     return () => {
       socket.off("column:created", onColumnCreated);
+      socket.off("column:reordered", onColumnReordered);
       socket.off("task:created", onTaskCreated);
       socket.off("task:updated", onTaskUpdated);
       socket.off("task:deleted", onTaskDeleted);

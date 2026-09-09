@@ -121,7 +121,10 @@ interface TaskCardProps {
 
 export default function TaskCard({ task, assignee, onTake }: TaskCardProps) {
   const openTask = useUiStore((s) => s.openTask);
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: task.id,
+    data: { type: "task" },
+  });
 
   // No self-transform here — DragOverlay renders the moving clone. This
   // element just becomes an invisible placeholder holding the slot's space

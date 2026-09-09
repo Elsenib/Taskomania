@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createInviteSchema, createTaskSchema, createColumnSchema } from "@team-tracker/shared";
+import { createInviteSchema, createTaskSchema, createColumnSchema, reorderColumnSchema } from "@team-tracker/shared";
 import { prisma } from "../db";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { toPublicUser, createInvite } from "../services/auth.service";
@@ -67,6 +67,48 @@ teamsRouter.post("/:teamId/columns", requireAdmin, async (req, res) => {
 
   broadcastToTeam(teamId, "column:created", column);
   res.status(201).json({ column });
+});
+
+// Admin-only, same as column creation — moves an existing column to sit
+// immediately after `afterColumnId` (or first, if null), renumbering every
+// sibling's `order` in one transaction so positions stay a dense 0..n-1
+// sequence (Column.order is an Int, not the Float Task.order uses, so
+// there's no room for fractional between-value inserts here).
+teamsRouter.patch("/:teamId/columns/:columnId/reorder", requireAdmin, async (req, res) => {
+  const parsed = reorderColumnSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const teamId = req.params.teamId;
+  const columnId = req.params.columnId;
+  const existing = await prisma.column.findMany({ where: { teamId }, orderBy: { order: "asc" } });
+
+  if (!existing.some((c) => c.id === columnId)) {
+    return res.status(404).json({ error: "Column not found" });
+  }
+
+  const withoutMoving = existing.filter((c) => c.id !== columnId);
+
+  let insertIndex = 0;
+  if (parsed.data.afterColumnId !== null) {
+    const idx = withoutMoving.findIndex((c) => c.id === parsed.data.afterColumnId);
+    if (idx === -1) return res.status(404).json({ error: "afterColumnId not found in this team" });
+    insertIndex = idx + 1;
+  }
+
+  const finalIds = withoutMoving.map((c) => c.id);
+  finalIds.splice(insertIndex, 0, columnId);
+
+  const columns = await prisma.$transaction(async (tx) => {
+    const updated = [];
+    for (let i = 0; i < finalIds.length; i++) {
+      const current = existing.find((c) => c.id === finalIds[i])!;
+      updated.push(current.order === i ? current : await tx.column.update({ where: { id: finalIds[i] }, data: { order: i } }));
+    }
+    return updated;
+  });
+
+  broadcastToTeam(teamId, "column:reordered", columns);
+  res.json({ columns });
 });
 
 teamsRouter.post("/:teamId/invites", requireAdmin, async (req, res) => {

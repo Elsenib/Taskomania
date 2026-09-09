@@ -55,3 +55,10 @@ export const createColumnSchema = z.object({
   // insert immediately after this column; omitted/null = append at the end
   afterColumnId: z.string().uuid().nullable().optional(),
 });
+
+export const reorderColumnSchema = z.object({
+  // insert the column immediately after this one; null = move to the front.
+  // Unlike createColumnSchema's afterColumnId, this is required — a reorder
+  // always has an explicit new position, there's no "leave it" default.
+  afterColumnId: z.string().uuid().nullable(),
+});

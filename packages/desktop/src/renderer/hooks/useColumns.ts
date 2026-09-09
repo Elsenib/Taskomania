@@ -21,3 +21,15 @@ export function useCreateColumn(teamId: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["columns", teamId] }),
   });
 }
+
+export function useReorderColumn(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ columnId, afterColumnId }: { columnId: string; afterColumnId: string | null }) =>
+      apiFetch<{ columns: Column[] }>(`/api/v1/teams/${teamId}/columns/${columnId}/reorder`, {
+        method: "PATCH",
+        body: { afterColumnId },
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["columns", teamId] }),
+  });
+}
