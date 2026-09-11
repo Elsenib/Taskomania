@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useCreateInvite } from "../hooks/useInvites";
 import { ApiError } from "../api/client";
+import { useT } from "../i18n/useT";
 
 export default function InviteModal({ teamId, onClose }: { teamId: string; onClose: () => void }) {
+  const t = useT();
   const createInvite = useCreateInvite(teamId);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -18,7 +20,7 @@ export default function InviteModal({ teamId, onClose }: { teamId: string; onClo
     try {
       await createInvite.mutateAsync();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Dəvət kodu yaradıla bilmədi");
+      setError(err instanceof ApiError ? err.message : t("invite.generateFailed"));
     }
   }
 
@@ -59,16 +61,14 @@ export default function InviteModal({ teamId, onClose }: { teamId: string; onClo
         onClick={(e) => e.stopPropagation()}
       >
         <h3 style={{ margin: "0 0 6px", fontWeight: 600, fontSize: 16, color: "var(--ink)" }}>
-          Komandaya dəvət et
+          {t("invite.title")}
         </h3>
-        <p style={{ margin: "0 0 18px", fontSize: 13, color: "var(--muted)" }}>
-          Bu kodu komanda üzvünə göndər — "Qoşul" ekranında istifadə edəcək.
-        </p>
+        <p style={{ margin: "0 0 18px", fontSize: 13, color: "var(--muted)" }}>{t("invite.description")}</p>
 
         {error && <div className="form-error">{error}</div>}
 
         {createInvite.isPending && !code && (
-          <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>Yaradılır...</div>
+          <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>{t("invite.generating")}</div>
         )}
 
         {code && (
@@ -104,7 +104,7 @@ export default function InviteModal({ teamId, onClose }: { teamId: string; onClo
               className="btn-secondary"
               style={{ width: "auto", padding: "6px 12px", fontSize: 12, flexShrink: 0 }}
             >
-              {copied ? "Kopyalandı ✓" : "Kopyala"}
+              {copied ? t("invite.copied") : t("invite.copy")}
             </button>
           </div>
         )}
@@ -117,10 +117,10 @@ export default function InviteModal({ teamId, onClose }: { teamId: string; onClo
             style={{ width: "auto" }}
             disabled={createInvite.isPending}
           >
-            Yeni kod yarat
+            {t("invite.regenerate")}
           </button>
           <button type="button" onClick={onClose} className="btn-secondary" style={{ width: "auto" }}>
-            Bağla
+            {t("common.close")}
           </button>
         </div>
       </div>

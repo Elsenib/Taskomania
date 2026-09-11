@@ -2,8 +2,10 @@ import { useState } from "react";
 import type { Task } from "@team-tracker/shared";
 import { useDependencies, useCreateDependency, useDeleteDependency } from "../hooks/useDependencies";
 import { ApiError } from "../api/client";
+import { useT } from "../i18n/useT";
 
 export default function DependencyPanel({ task, allTasks }: { task: Task; allTasks: Task[] }) {
+  const t = useT();
   const { data: dependencies, isLoading } = useDependencies(task.id);
   const createDependency = useCreateDependency(task.id);
   const deleteDependency = useDeleteDependency(task.id);
@@ -23,7 +25,7 @@ export default function DependencyPanel({ task, allTasks }: { task: Task; allTas
       await createDependency.mutateAsync(selected);
       setSelected("");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Əlaqə yaradıla bilmədi");
+      setError(err instanceof ApiError ? err.message : t("task.dependencyCreateFailed"));
     }
   }
 
@@ -32,28 +34,28 @@ export default function DependencyPanel({ task, allTasks }: { task: Task; allTas
     try {
       await deleteDependency.mutateAsync(id);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Silmək alınmadı");
+      setError(err instanceof ApiError ? err.message : t("common.deleteFailed"));
     }
   }
 
   return (
     <div style={{ marginTop: 22, paddingTop: 18, borderTop: "1px solid var(--border)" }}>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>Asılılıqlar</div>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>{t("task.dependencies")}</div>
 
-      {isLoading && <div style={{ fontSize: 13, color: "var(--muted)" }}>Yüklənir...</div>}
+      {isLoading && <div style={{ fontSize: 13, color: "var(--muted)" }}>{t("common.loading")}</div>}
       {error && <div style={{ fontSize: 12, color: "var(--priority-high-ink)", marginBottom: 8 }}>{error}</div>}
 
       {!isLoading && blocking.length === 0 && blockedBy.length === 0 && (
-        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>Heç bir əlaqə yoxdur.</div>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>{t("task.noDependencies")}</div>
       )}
 
       {blockedBy.length > 0 && (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Bunlardan asılıdır:</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>{t("task.dependsOn")}</div>
           {blockedBy.map((d) => (
             <DependencyRow
               key={d.id}
-              title={tasksById.get(d.blockingTaskId)?.title ?? "(silinmiş tapşırıq)"}
+              title={tasksById.get(d.blockingTaskId)?.title ?? t("task.deletedTask")}
               onRemove={() => handleRemove(d.id)}
             />
           ))}
@@ -62,11 +64,11 @@ export default function DependencyPanel({ task, allTasks }: { task: Task; allTas
 
       {blocking.length > 0 && (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Bunları bloklayır:</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>{t("task.blocks")}</div>
           {blocking.map((d) => (
             <DependencyRow
               key={d.id}
-              title={tasksById.get(d.blockedTaskId)?.title ?? "(silinmiş tapşırıq)"}
+              title={tasksById.get(d.blockedTaskId)?.title ?? t("task.deletedTask")}
               onRemove={() => handleRemove(d.id)}
             />
           ))}
@@ -88,10 +90,10 @@ export default function DependencyPanel({ task, allTasks }: { task: Task; allTas
               color: "var(--ink)",
             }}
           >
-            <option value="">— tapşırıq seç —</option>
-            {otherTasks.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.title}
+            <option value="">{t("task.selectTask")}</option>
+            {otherTasks.map((ot) => (
+              <option key={ot.id} value={ot.id}>
+                {ot.title}
               </option>
             ))}
           </select>
@@ -109,7 +111,7 @@ export default function DependencyPanel({ task, allTasks }: { task: Task; allTas
               opacity: !selected || createDependency.isPending ? 0.5 : 1,
             }}
           >
-            Blokla
+            {t("task.blockButton")}
           </button>
         </div>
       )}
@@ -118,6 +120,7 @@ export default function DependencyPanel({ task, allTasks }: { task: Task; allTas
 }
 
 function DependencyRow({ title, onRemove }: { title: string; onRemove: () => void }) {
+  const t = useT();
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0" }}>
       <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>{title}</span>
@@ -126,7 +129,7 @@ function DependencyRow({ title, onRemove }: { title: string; onRemove: () => voi
         onClick={onRemove}
         style={{ border: "none", background: "transparent", color: "var(--priority-high-ink)", fontSize: 12, cursor: "pointer" }}
       >
-        Sil
+        {t("common.delete")}
       </button>
     </div>
   );

@@ -6,12 +6,13 @@ import { isDesignFile } from "../lib/fileKind";
 import { ApiError } from "../api/client";
 import AttachmentPreviewModal from "./AttachmentPreviewModal";
 import DesignCanvas from "../canvas/DesignCanvas";
-
-function kindLabel(a: Attachment) {
-  return a.kind === "ARCHIVE" ? "Layihə" : "Fayl";
-}
+import { useT } from "../i18n/useT";
 
 export default function AttachmentPanel({ taskId, members }: { taskId: string; members: User[] }) {
+  const t = useT();
+  function kindLabel(a: Attachment) {
+    return a.kind === "ARCHIVE" ? t("task.kindArchive") : t("task.kindFile");
+  }
   const { data: attachments, isLoading, isError } = useAttachments(taskId);
   const uploadAttachment = useUploadAttachment(taskId);
   const deleteAttachment = useDeleteAttachment(taskId);
@@ -34,7 +35,7 @@ export default function AttachmentPanel({ taskId, members }: { taskId: string; m
         await uploadAttachment.mutateAsync({ file, kind: "FILE" });
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Yükləmə alınmadı");
+      setError(err instanceof ApiError ? err.message : t("task.uploadFailed"));
     }
   }
 
@@ -45,7 +46,7 @@ export default function AttachmentPanel({ taskId, members }: { taskId: string; m
     try {
       await uploadAttachment.mutateAsync({ file, kind: "ARCHIVE" });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Yükləmə alınmadı");
+      setError(err instanceof ApiError ? err.message : t("task.uploadFailed"));
     }
   }
 
@@ -54,25 +55,25 @@ export default function AttachmentPanel({ taskId, members }: { taskId: string; m
     try {
       await deleteAttachment.mutateAsync(id);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Silmək alınmadı");
+      setError(err instanceof ApiError ? err.message : t("common.deleteFailed"));
     }
   }
 
   return (
     <div style={{ marginTop: 22, paddingTop: 18, borderTop: "1px solid var(--border)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <span style={{ fontSize: 12, color: "var(--muted)" }}>Fayllar</span>
+        <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("task.attachments")}</span>
         <div style={{ display: "flex", gap: 12 }}>
           {designFileCount > 0 && (
             <button type="button" onClick={() => setCanvasOpen(true)} style={linkButtonStyle}>
-              Kanvasda bax
+              {t("task.openInCanvas")}
             </button>
           )}
           <button type="button" onClick={() => fileInputRef.current?.click()} style={linkButtonStyle}>
-            + Fayl əlavə et
+            {t("task.addFile")}
           </button>
           <button type="button" onClick={() => archiveInputRef.current?.click()} style={linkButtonStyle}>
-            + Layihə (.zip)
+            {t("task.addProject")}
           </button>
         </div>
         <input
@@ -99,15 +100,15 @@ export default function AttachmentPanel({ taskId, members }: { taskId: string; m
 
       {error && <div style={{ fontSize: 12, color: "var(--priority-high-ink)", marginBottom: 8 }}>{error}</div>}
       {uploadAttachment.isPending && (
-        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>Yüklənir...</div>
+        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>{t("common.loading")}</div>
       )}
 
-      {isLoading && <div style={{ fontSize: 13, color: "var(--muted)" }}>Yüklənir...</div>}
+      {isLoading && <div style={{ fontSize: 13, color: "var(--muted)" }}>{t("common.loading")}</div>}
       {isError && (
-        <div style={{ fontSize: 13, color: "var(--priority-high-ink)" }}>Faylları yükləmək alınmadı.</div>
+        <div style={{ fontSize: 13, color: "var(--priority-high-ink)" }}>{t("task.attachmentsLoadError")}</div>
       )}
       {!isLoading && !isError && attachments && attachments.length === 0 && (
-        <div style={{ fontSize: 13, color: "var(--muted)" }}>Hələ fayl əlavə edilməyib.</div>
+        <div style={{ fontSize: 13, color: "var(--muted)" }}>{t("task.noAttachments")}</div>
       )}
 
       {attachments && attachments.length > 0 && (
@@ -169,7 +170,7 @@ export default function AttachmentPanel({ taskId, members }: { taskId: string; m
                   marginLeft: 10,
                 }}
               >
-                Sil
+                {t("common.delete")}
               </button>
             </div>
           ))}

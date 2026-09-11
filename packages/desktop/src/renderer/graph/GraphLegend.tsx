@@ -1,3 +1,5 @@
+import { useT } from "../i18n/useT";
+
 export interface GraphGroup {
   key: string;
   label: string;
@@ -13,6 +15,7 @@ interface Props {
 }
 
 export default function GraphLegend({ groups, hidden, onToggle, onToggleAll }: Props) {
+  const t = useT();
   const allVisible = hidden.size === 0;
 
   return (
@@ -36,7 +39,7 @@ export default function GraphLegend({ groups, hidden, onToggle, onToggleAll }: P
           marginBottom: 14,
         }}
       >
-        QRUPLAR
+        {t("graph.groupsHeading")}
       </div>
 
       <label
@@ -59,7 +62,7 @@ export default function GraphLegend({ groups, hidden, onToggle, onToggleAll }: P
           onChange={onToggleAll}
           style={{ accentColor: "#4fa8ff", width: 14, height: 14 }}
         />
-        Hamısını seç
+        {t("graph.selectAll")}
       </label>
 
       {groups.map((g) => (

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Task, Comment, Attachment, TaskDependency, Column } from "@team-tracker/shared";
+import type { Task, Comment, Attachment, TaskDependency, Column, User, Project } from "@team-tracker/shared";
 import { getSocket } from "../api/socket";
 import { useAuth } from "../auth/AuthContext";
 import { wasRecentlyMutatedByMe } from "./useTasks";
@@ -40,6 +40,42 @@ export function useRealtimeSync(teamId: string) {
       invalidateGraph();
     };
 
+    const onColumnRenamed = (_column: Column) => {
+      queryClient.invalidateQueries({ queryKey: ["columns", teamId] });
+      invalidateGraph();
+    };
+
+    const onProjectCreated = (project: Project) => {
+      queryClient.setQueryData<{ projects: Project[] }>(["projects", teamId], (old) => {
+        if (!old) return old;
+        if (old.projects.some((p) => p.id === project.id)) return old;
+        return { projects: [...old.projects, project] };
+      });
+    };
+
+    const onProjectRenamed = (project: Project) => {
+      queryClient.setQueryData<{ projects: Project[] }>(["projects", teamId], (old) => {
+        if (!old) return old;
+        return { projects: old.projects.map((p) => (p.id === project.id ? project : p)) };
+      });
+    };
+
+    const onProjectDeleted = ({ id }: { id: string }) => {
+      queryClient.setQueryData<{ projects: Project[] }>(["projects", teamId], (old) => {
+        if (!old) return old;
+        return { projects: old.projects.filter((p) => p.id !== id) };
+      });
+      // Tasks tagged with the deleted project fall back to unlabeled server-side.
+      queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
+    };
+
+    const onMemberUpdated = (member: User) => {
+      queryClient.setQueryData<{ members: User[] }>(["members", teamId], (old) => {
+        if (!old) return old;
+        return { members: old.members.map((m) => (m.id === member.id ? member : m)) };
+      });
+    };
+
     const onTaskCreated = (task: Task) => {
       queryClient.setQueryData<{ tasks: Task[] }>(["tasks", teamId], (old) => {
         if (!old) return old;
@@ -60,6 +96,9 @@ export function useRealtimeSync(teamId: string) {
         return { tasks: old.tasks.map((t) => (t.id === task.id ? task : t)) };
       });
       invalidateGraph();
+      if (previous && previous.columnId !== task.columnId) {
+        queryClient.invalidateQueries({ queryKey: ["taskActivity", task.id] });
+      }
 
       const assignedToMeJustNow = task.assigneeId === user.id && previous?.assigneeId !== user.id;
       if (assignedToMeJustNow && !wasRecentlyMutatedByMe(task.id)) {
@@ -99,6 +138,7 @@ export function useRealtimeSync(teamId: string) {
         }
       );
       invalidateGraph();
+      queryClient.invalidateQueries({ queryKey: ["teamAttachments", teamId] });
     };
 
     const onAttachmentDeleted = ({ id, taskId }: { id: string; taskId: string }) => {
@@ -107,6 +147,7 @@ export function useRealtimeSync(teamId: string) {
         return { attachments: old.attachments.filter((a) => a.id !== id) };
       });
       invalidateGraph();
+      queryClient.invalidateQueries({ queryKey: ["teamAttachments", teamId] });
     };
 
     const onDependencyCreated = (dep: TaskDependency) => {
@@ -146,6 +187,11 @@ export function useRealtimeSync(teamId: string) {
 
     socket.on("column:created", onColumnCreated);
     socket.on("column:reordered", onColumnReordered);
+    socket.on("column:renamed", onColumnRenamed);
+    socket.on("project:created", onProjectCreated);
+    socket.on("project:renamed", onProjectRenamed);
+    socket.on("project:deleted", onProjectDeleted);
+    socket.on("member:updated", onMemberUpdated);
     socket.on("task:created", onTaskCreated);
     socket.on("task:updated", onTaskUpdated);
     socket.on("task:deleted", onTaskDeleted);
@@ -158,6 +204,11 @@ export function useRealtimeSync(teamId: string) {
     return () => {
       socket.off("column:created", onColumnCreated);
       socket.off("column:reordered", onColumnReordered);
+      socket.off("column:renamed", onColumnRenamed);
+      socket.off("project:created", onProjectCreated);
+      socket.off("project:renamed", onProjectRenamed);
+      socket.off("project:deleted", onProjectDeleted);
+      socket.off("member:updated", onMemberUpdated);
       socket.off("task:created", onTaskCreated);
       socket.off("task:updated", onTaskUpdated);
       socket.off("task:deleted", onTaskDeleted);

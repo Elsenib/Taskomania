@@ -2,17 +2,11 @@ import { CSSProperties } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import type { Task, User } from "@team-tracker/shared";
 import PriorityBadge from "../task/PriorityBadge";
+import Avatar from "../components/Avatar";
 import { useUiStore } from "../store/uiStore";
 import { formatShortDate } from "../lib/formatDate";
-
-function initials(name: string) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("");
-}
+import { useT } from "../i18n/useT";
+import type { ProjectTag } from "./projectTag";
 
 function formatDueDate(iso: string) {
   const d = new Date(iso);
@@ -23,13 +17,15 @@ function formatDueDate(iso: string) {
 interface CardVisualProps {
   task: Task;
   assignee: User | undefined;
+  project?: ProjectTag;
   lifted?: boolean;
   onTake?: () => void;
 }
 
 // Pure presentational card markup, shared between the in-column draggable
 // card and its DragOverlay clone — keeps the two visually identical.
-function TaskCardVisual({ task, assignee, lifted, onTake }: CardVisualProps) {
+function TaskCardVisual({ task, assignee, project, lifted, onTake }: CardVisualProps) {
+  const t = useT();
   const due = task.dueDate ? formatDueDate(task.dueDate) : null;
 
   return (
@@ -43,13 +39,30 @@ function TaskCardVisual({ task, assignee, lifted, onTake }: CardVisualProps) {
         width: lifted ? 248 : undefined,
       }}
     >
+      {project && (
+        <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: project.color, flexShrink: 0 }} />
+          <span
+            style={{
+              fontSize: 10.5,
+              fontWeight: 600,
+              color: project.color,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {project.name}
+          </span>
+        </div>
+      )}
       <div style={{ fontSize: 13.5, fontWeight: 500, marginBottom: 9, color: "var(--ink)" }}>{task.title}</div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
           <PriorityBadge priority={task.priority} />
           {due && (
             <span style={{ fontSize: 11, color: due.overdue ? "var(--priority-high-ink)" : "var(--muted)" }}>
-              {due.overdue ? "gecikib · " : ""}
+              {due.overdue ? t("board.overduePrefix") : ""}
               {due.label}
             </span>
           )}
@@ -74,29 +87,10 @@ function TaskCardVisual({ task, assignee, lifted, onTake }: CardVisualProps) {
                 flexShrink: 0,
               }}
             >
-              Götür
+              {t("board.take")}
             </button>
           )}
-          {assignee && (
-            <div
-              title={assignee.displayName}
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: "50%",
-                background: "var(--accent)",
-                color: "white",
-                fontSize: 10,
-                fontWeight: 700,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              {initials(assignee.displayName)}
-            </div>
-          )}
+          {assignee && <Avatar displayName={assignee.displayName} avatarUrl={assignee.avatarUrl} />}
         </div>
       </div>
     </div>
@@ -105,10 +99,18 @@ function TaskCardVisual({ task, assignee, lifted, onTake }: CardVisualProps) {
 
 // Rendered inside <DragOverlay> — a free-floating clone, unconstrained by
 // any column's overflow/stacking context, that follows the pointer.
-export function TaskCardOverlay({ task, assignee }: { task: Task; assignee: User | undefined }) {
+export function TaskCardOverlay({
+  task,
+  assignee,
+  project,
+}: {
+  task: Task;
+  assignee: User | undefined;
+  project?: ProjectTag;
+}) {
   return (
     <div style={{ cursor: "grabbing" }}>
-      <TaskCardVisual task={task} assignee={assignee} lifted />
+      <TaskCardVisual task={task} assignee={assignee} project={project} lifted />
     </div>
   );
 }
@@ -116,10 +118,11 @@ export function TaskCardOverlay({ task, assignee }: { task: Task; assignee: User
 interface TaskCardProps {
   task: Task;
   assignee: User | undefined;
+  project?: ProjectTag;
   onTake?: () => void;
 }
 
-export default function TaskCard({ task, assignee, onTake }: TaskCardProps) {
+export default function TaskCard({ task, assignee, project, onTake }: TaskCardProps) {
   const openTask = useUiStore((s) => s.openTask);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: task.id,
@@ -137,7 +140,7 @@ export default function TaskCard({ task, assignee, onTake }: TaskCardProps) {
 
   return (
     <div ref={setNodeRef} style={style} {...listeners} {...attributes} onClick={() => openTask(task.id)}>
-      <TaskCardVisual task={task} assignee={assignee} onTake={onTake} />
+      <TaskCardVisual task={task} assignee={assignee} project={project} onTake={onTake} />
     </div>
   );
 }

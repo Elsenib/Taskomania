@@ -1,9 +1,12 @@
 import { FormEvent, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { ApiError } from "../api/client";
+import PasswordInput from "../components/PasswordInput";
+import { useT } from "../i18n/useT";
 
 export default function CreateTeamScreen() {
   const { registerTeam } = useAuth();
+  const t = useT();
   const [teamName, setTeamName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -18,7 +21,7 @@ export default function CreateTeamScreen() {
     try {
       await registerTeam({ teamName, displayName, email, password });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Komanda yaradıla bilmədi");
+      setError(err instanceof ApiError ? err.message : t("auth.createFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -28,7 +31,7 @@ export default function CreateTeamScreen() {
     <form onSubmit={handleSubmit}>
       {error && <div className="form-error">{error}</div>}
       <div className="field">
-        <label htmlFor="ct-teamname">Komanda adı</label>
+        <label htmlFor="ct-teamname">{t("auth.teamName")}</label>
         <input
           id="ct-teamname"
           required
@@ -37,7 +40,7 @@ export default function CreateTeamScreen() {
         />
       </div>
       <div className="field">
-        <label htmlFor="ct-displayname">Sənin adın</label>
+        <label htmlFor="ct-displayname">{t("auth.yourName")}</label>
         <input
           id="ct-displayname"
           required
@@ -46,7 +49,7 @@ export default function CreateTeamScreen() {
         />
       </div>
       <div className="field">
-        <label htmlFor="ct-email">Email</label>
+        <label htmlFor="ct-email">{t("auth.email")}</label>
         <input
           id="ct-email"
           type="email"
@@ -56,10 +59,9 @@ export default function CreateTeamScreen() {
         />
       </div>
       <div className="field">
-        <label htmlFor="ct-password">Şifrə (min. 8 simvol)</label>
-        <input
+        <label htmlFor="ct-password">{t("auth.passwordMin8")}</label>
+        <PasswordInput
           id="ct-password"
-          type="password"
           required
           minLength={8}
           value={password}
@@ -67,7 +69,7 @@ export default function CreateTeamScreen() {
         />
       </div>
       <button className="btn-primary" type="submit" disabled={submitting}>
-        {submitting ? "Yaradılır..." : "Komanda yarat"}
+        {submitting ? t("auth.creating") : t("auth.submitCreate")}
       </button>
     </form>
   );

@@ -1,9 +1,12 @@
 import { FormEvent, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { ApiError } from "../api/client";
+import PasswordInput from "../components/PasswordInput";
+import { useT } from "../i18n/useT";
 
 export default function LoginScreen() {
   const { login } = useAuth();
+  const t = useT();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +19,7 @@ export default function LoginScreen() {
     try {
       await login({ email, password });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Giriş alınmadı");
+      setError(err instanceof ApiError ? err.message : t("auth.loginFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -26,7 +29,7 @@ export default function LoginScreen() {
     <form onSubmit={handleSubmit}>
       {error && <div className="form-error">{error}</div>}
       <div className="field">
-        <label htmlFor="login-email">Email</label>
+        <label htmlFor="login-email">{t("auth.email")}</label>
         <input
           id="login-email"
           type="email"
@@ -36,17 +39,16 @@ export default function LoginScreen() {
         />
       </div>
       <div className="field">
-        <label htmlFor="login-password">Şifrə</label>
-        <input
+        <label htmlFor="login-password">{t("auth.password")}</label>
+        <PasswordInput
           id="login-password"
-          type="password"
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
       </div>
       <button className="btn-primary" type="submit" disabled={submitting}>
-        {submitting ? "Giriş edilir..." : "Daxil ol"}
+        {submitting ? t("auth.loggingIn") : t("auth.submitLogin")}
       </button>
     </form>
   );

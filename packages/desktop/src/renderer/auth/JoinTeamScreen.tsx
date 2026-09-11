@@ -1,9 +1,12 @@
 import { FormEvent, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { ApiError } from "../api/client";
+import PasswordInput from "../components/PasswordInput";
+import { useT } from "../i18n/useT";
 
 export default function JoinTeamScreen() {
   const { joinTeam } = useAuth();
+  const t = useT();
   const [inviteCode, setInviteCode] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -18,7 +21,7 @@ export default function JoinTeamScreen() {
     try {
       await joinTeam({ inviteCode, displayName, email, password });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Komandaya qoşulmaq alınmadı");
+      setError(err instanceof ApiError ? err.message : t("auth.joinFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -28,7 +31,7 @@ export default function JoinTeamScreen() {
     <form onSubmit={handleSubmit}>
       {error && <div className="form-error">{error}</div>}
       <div className="field">
-        <label htmlFor="jt-code">Dəvət kodu</label>
+        <label htmlFor="jt-code">{t("auth.inviteCode")}</label>
         <input
           id="jt-code"
           required
@@ -37,7 +40,7 @@ export default function JoinTeamScreen() {
         />
       </div>
       <div className="field">
-        <label htmlFor="jt-displayname">Sənin adın</label>
+        <label htmlFor="jt-displayname">{t("auth.yourName")}</label>
         <input
           id="jt-displayname"
           required
@@ -46,7 +49,7 @@ export default function JoinTeamScreen() {
         />
       </div>
       <div className="field">
-        <label htmlFor="jt-email">Email</label>
+        <label htmlFor="jt-email">{t("auth.email")}</label>
         <input
           id="jt-email"
           type="email"
@@ -56,10 +59,9 @@ export default function JoinTeamScreen() {
         />
       </div>
       <div className="field">
-        <label htmlFor="jt-password">Şifrə (min. 8 simvol)</label>
-        <input
+        <label htmlFor="jt-password">{t("auth.passwordMin8")}</label>
+        <PasswordInput
           id="jt-password"
-          type="password"
           required
           minLength={8}
           value={password}
@@ -67,7 +69,7 @@ export default function JoinTeamScreen() {
         />
       </div>
       <button className="btn-primary" type="submit" disabled={submitting}>
-        {submitting ? "Qoşulur..." : "Komandaya qoşul"}
+        {submitting ? t("auth.joining") : t("auth.submitJoin")}
       </button>
     </form>
   );

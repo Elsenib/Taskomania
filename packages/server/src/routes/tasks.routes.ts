@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { updateTaskSchema, createCommentSchema, createDependencySchema } from "@team-tracker/shared";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireAdmin } from "../middleware/auth";
 import * as taskService from "../services/task.service";
 import * as commentService from "../services/comment.service";
 import * as attachmentService from "../services/attachment.service";
@@ -26,7 +26,13 @@ tasksRouter.patch("/:taskId", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   try {
-    const task = await taskService.updateTask(req.params.taskId, req.auth!.teamId, parsed.data);
+    const task = await taskService.updateTask(
+      req.params.taskId,
+      req.auth!.teamId,
+      req.auth!.userId,
+      req.auth!.role,
+      parsed.data
+    );
     const publicTask = taskService.toPublicTask(task);
     broadcastToTeam(req.auth!.teamId, "task:updated", publicTask);
     res.json({ task: publicTask });
@@ -35,11 +41,21 @@ tasksRouter.patch("/:taskId", async (req, res) => {
   }
 });
 
-tasksRouter.delete("/:taskId", async (req, res) => {
+tasksRouter.delete("/:taskId", requireAdmin, async (req, res) => {
   try {
     await taskService.deleteTask(req.params.taskId, req.auth!.teamId);
     broadcastToTeam(req.auth!.teamId, "task:deleted", { id: req.params.taskId });
     res.status(204).end();
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+tasksRouter.get("/:taskId/activity", async (req, res) => {
+  try {
+    await taskService.getTaskInTeam(req.params.taskId, req.auth!.teamId);
+    const activity = await taskService.listTaskActivity(req.params.taskId);
+    res.json({ activity: activity.map(taskService.toPublicTaskActivity) });
   } catch (err) {
     handleError(err, res);
   }

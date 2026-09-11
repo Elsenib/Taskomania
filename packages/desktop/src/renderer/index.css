@@ -21,15 +21,21 @@
   --priority-high-dot: #ff3b30;
 }
 
-/* Dark mode — follows the OS theme automatically (no in-app toggle). Same
+/* Dark mode — follows the OS theme by default, but Settings has an in-app
+   light/dark override (`data-theme` on <html>, persisted client-side). Same
    layout/structure throughout the app; only these tokens change. Palette
    sampled directly from startup-animation.mp4 (deep navy background, bright
    cyan accent) rather than a generic dark-grey theme, so the app doesn't
    visually jump between the startup video and the rest of the UI. Priority
    colors use Apple's own dark-mode system-color adjustments (brighter than
-   their light-mode counterparts, needed for contrast on a dark background). */
+   their light-mode counterparts, needed for contrast on a dark background).
+   The token block is duplicated under [data-theme="dark"] rather than shared
+   with the media query, so an explicit choice wins in both directions: the
+   media query is guarded with :not([data-theme="light"]) so it backs off
+   when the user explicitly chose light on a dark-OS machine, and the
+   attribute selector covers the opposite case (explicit dark on a light OS). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --ink: #eef4fa;
     --ink-soft: #b8c7d9;
     --paper: #0a1628;
@@ -49,12 +55,39 @@
     --priority-high-dot: #ff453a;
   }
 
-  ::-webkit-scrollbar-thumb {
+  :root:not([data-theme="light"]) ::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.16);
   }
-  ::-webkit-scrollbar-thumb:hover {
+  :root:not([data-theme="light"]) ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.3);
   }
+}
+
+:root[data-theme="dark"] {
+  --ink: #eef4fa;
+  --ink-soft: #b8c7d9;
+  --paper: #0a1628;
+  --paper-panel: #0f2038;
+  --card: #122844;
+  --border: rgba(140, 190, 255, 0.14);
+  --muted: #7d93ad;
+  --accent: #24e2fb;
+  --accent-hover: #4de8ff;
+  --accent-paper: rgba(36, 226, 251, 0.12);
+
+  --priority-low-ink: #32d74b;
+  --priority-low-dot: #32d74b;
+  --priority-medium-ink: #ff9f0a;
+  --priority-medium-dot: #ff9f0a;
+  --priority-high-ink: #ff453a;
+  --priority-high-dot: #ff453a;
+}
+
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+}
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 * {

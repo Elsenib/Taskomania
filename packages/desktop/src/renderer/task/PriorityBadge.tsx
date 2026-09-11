@@ -1,6 +1,5 @@
 import type { Priority } from "@team-tracker/shared";
-
-const LABELS: Record<Priority, string> = { LOW: "Aşağı", MEDIUM: "Orta", HIGH: "Yüksək" };
+import { useT } from "../i18n/useT";
 
 export const PRIORITY_INK: Record<Priority, string> = {
   LOW: "var(--priority-low-ink)",
@@ -15,6 +14,12 @@ export const PRIORITY_DOT: Record<Priority, string> = {
 };
 
 export default function PriorityBadge({ priority }: { priority: Priority }) {
+  const t = useT();
+  const labels: Record<Priority, string> = {
+    LOW: t("priority.low"),
+    MEDIUM: t("priority.medium"),
+    HIGH: t("priority.high"),
+  };
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
       <span
@@ -26,7 +31,7 @@ export default function PriorityBadge({ priority }: { priority: Priority }) {
           flexShrink: 0,
         }}
       />
-      <span style={{ fontSize: 11.5, fontWeight: 500, color: "var(--muted)" }}>{LABELS[priority]}</span>
+      <span style={{ fontSize: 11.5, fontWeight: 500, color: "var(--muted)" }}>{labels[priority]}</span>
     </span>
   );
 }

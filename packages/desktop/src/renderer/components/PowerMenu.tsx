@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { useT } from "../i18n/useT";
 
 // The window runs fullscreen with no native frame/title bar, so there's no
 // OS close button — this is the only way to close the app, wherever the
 // user currently is (video, auth screens, board all render it the same way).
 export default function PowerMenu() {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -20,7 +22,7 @@ export default function PowerMenu() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        aria-label="Tətbiqi bağla"
+        aria-label={t("powerMenu.ariaLabel")}
         style={{
           width: 32,
           height: 32,
@@ -63,7 +65,7 @@ export default function PowerMenu() {
               window.teamTracker?.sleepApp();
             }}
           >
-            Yuxu rejimi
+            {t("powerMenu.sleep")}
           </button>
           <button
             type="button"
@@ -74,7 +76,7 @@ export default function PowerMenu() {
               window.teamTracker?.shutdownApp();
             }}
           >
-            Söndür
+            {t("powerMenu.shutdown")}
           </button>
         </div>
       )}

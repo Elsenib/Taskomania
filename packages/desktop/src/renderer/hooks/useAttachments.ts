@@ -13,6 +13,17 @@ export function useAttachments(taskId: string | undefined) {
   });
 }
 
+// All design-canvas attachments across the whole team — the canvas browser
+// filters this client-side by uploadedById to show one member's canvas at a
+// time, rather than fetching per-member (avoids N+1 requests when switching).
+export function useTeamAttachments(teamId: string) {
+  return useQuery({
+    queryKey: ["teamAttachments", teamId],
+    queryFn: () => apiFetch<{ attachments: Attachment[] }>(`/api/v1/teams/${teamId}/attachments`),
+    select: (res) => res.attachments,
+  });
+}
+
 export function useUploadAttachment(taskId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({

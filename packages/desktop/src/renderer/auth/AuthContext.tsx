@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, ReactNode } from "react";
-import type { AuthResponse, User } from "@team-tracker/shared";
+import type { AuthResponse, MyTeam, User } from "@team-tracker/shared";
 import { apiFetch, ApiError, getToken, setToken, clearToken, setUnauthorizedHandler } from "../api/client";
 import { connectSocket, disconnectSocket } from "../api/socket";
 
@@ -25,7 +25,17 @@ interface AuthContextValue {
     password: string;
   }): Promise<void>;
   login(input: { email: string; password: string }): Promise<void>;
+  updateProfile(input: {
+    displayName?: string;
+    avatarUrl?: string | null;
+    onboardingSeen?: true;
+  }): Promise<void>;
   logout(): void;
+  myTeams(): Promise<MyTeam[]>;
+  createAdditionalTeam(teamName: string): Promise<void>;
+  joinAdditionalTeam(inviteCode: string): Promise<void>;
+  switchTeam(teamId: string): Promise<void>;
+  leaveTeam(teamId: string): Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -124,9 +134,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
           applyAuth(res);
         },
+        async updateProfile(input) {
+          const res = await apiFetch<{ user: User }>("/api/v1/auth/me", {
+            method: "PATCH",
+            body: input,
+          });
+          setUser(res.user);
+        },
         logout() {
           setSessionExpired(false);
           clearSession();
+        },
+        async myTeams() {
+          const res = await apiFetch<{ teams: MyTeam[] }>("/api/v1/auth/my-teams");
+          return res.teams;
+        },
+        async createAdditionalTeam(teamName) {
+          const res = await apiFetch<AuthResponse>("/api/v1/auth/teams", {
+            method: "POST",
+            body: { teamName },
+          });
+          applyAuth(res);
+        },
+        async joinAdditionalTeam(inviteCode) {
+          const res = await apiFetch<AuthResponse>("/api/v1/auth/teams/join", {
+            method: "POST",
+            body: { inviteCode },
+          });
+          applyAuth(res);
+        },
+        async switchTeam(teamId) {
+          const res = await apiFetch<AuthResponse>("/api/v1/auth/switch-team", {
+            method: "POST",
+            body: { teamId },
+          });
+          applyAuth(res);
+        },
+        async leaveTeam(teamId) {
+          const res = await apiFetch<AuthResponse>("/api/v1/auth/leave-team", {
+            method: "POST",
+            body: { teamId },
+          });
+          applyAuth(res);
         },
       }}
     >

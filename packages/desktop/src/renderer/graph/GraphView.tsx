@@ -6,6 +6,8 @@ import { useRealtimeSync } from "../hooks/useRealtimeSync";
 import { useUiStore } from "../store/uiStore";
 import TaskDetailModal from "../task/TaskDetailModal";
 import GraphLegend, { GraphGroup } from "./GraphLegend";
+import { useT } from "../i18n/useT";
+import { groupColor } from "../lib/color";
 
 // A clean "knowledge graph explorer" look — small flat dots grouped by
 // color, thin low-opacity edges, dark analytical background, legend +
@@ -35,12 +37,6 @@ interface GLink {
   kind: "assignee" | "dependency" | "attachment";
 }
 
-function groupColor(index: number): string {
-  // Golden-angle hue spacing gives well-separated colors for any number of
-  // groups without a hardcoded palette running out.
-  return `hsl(${(index * 137.508) % 360}, 62%, 58%)`;
-}
-
 function hexToRgba(hex: string, alpha: number): string {
   const h = hex.replace("#", "");
   const r = parseInt(h.substring(0, 2), 16);
@@ -57,7 +53,16 @@ function endpointId(endpoint: unknown): string {
   return (endpoint as { id: string }).id;
 }
 
-export default function GraphView({ teamId, onExit }: { teamId: string; onExit: () => void }) {
+export default function GraphView({
+  teamId,
+  onExit,
+  onOpenProfile,
+}: {
+  teamId: string;
+  onExit: () => void;
+  onOpenProfile: (userId: string) => void;
+}) {
+  const t = useT();
   const { data, isLoading, isError, refetch } = useGraphData(teamId);
   useRealtimeSync(teamId);
 
@@ -80,11 +85,16 @@ export default function GraphView({ teamId, onExit }: { teamId: string; onExit: 
     return () => observer.disconnect();
   }, []);
 
-  const columnColorById = useMemo(() => {
+  // Each team member gets a distinct, stable color — a task's node (and its
+  // assignee link) is colored by WHO owns it rather than which column it
+  // currently sits in, so a member's work is visually traceable across the
+  // whole board at a glance (the competitive/accountability angle from the
+  // workflow spec: "hər üzvün qrafda rəngi fərqli olacaq").
+  const memberColorById = useMemo(() => {
     const map = new Map<string, string>();
-    (data?.columns ?? []).forEach((c, i) => map.set(c.id, groupColor(i)));
+    (data?.members ?? []).forEach((m, i) => map.set(m.id, groupColor(i)));
     return map;
-  }, [data?.columns]);
+  }, [data?.members]);
 
   const allNodesAndLinks = useMemo(() => {
     const nodes: GNode[] = [];
@@ -96,17 +106,18 @@ export default function GraphView({ teamId, onExit }: { teamId: string; onExit: 
         id: member.id,
         kind: "member",
         label: member.displayName,
-        color: MEMBER_COLOR,
-        groupKey: "members",
+        color: memberColorById.get(member.id) ?? MEMBER_COLOR,
+        groupKey: `member:${member.id}`,
       });
     }
     for (const task of data.tasks) {
+      const color = task.assigneeId ? memberColorById.get(task.assigneeId) ?? MUTED : MUTED;
       nodes.push({
         id: task.id,
         kind: "task",
         label: task.title,
-        color: columnColorById.get(task.columnId) ?? MUTED,
-        groupKey: `col:${task.columnId}`,
+        color,
+        groupKey: task.assigneeId ? `member:${task.assigneeId}` : "unassigned",
       });
       if (task.assigneeId) {
         links.push({ source: task.id, target: task.assigneeId, kind: "assignee" });
@@ -126,22 +137,25 @@ export default function GraphView({ teamId, onExit }: { teamId: string; onExit: 
       links.push({ source: dep.blockingTaskId, target: dep.blockedTaskId, kind: "dependency" });
     }
     return { nodes, links };
-  }, [data, columnColorById]);
+  }, [data, memberColorById]);
 
   const groups: GraphGroup[] = useMemo(() => {
     if (!data) return [];
-    const list: GraphGroup[] = data.columns.map((c) => ({
-      key: `col:${c.id}`,
-      label: c.name,
-      color: columnColorById.get(c.id) ?? MUTED,
-      count: data.tasks.filter((t) => t.columnId === c.id).length,
+    const list: GraphGroup[] = data.members.map((m) => ({
+      key: `member:${m.id}`,
+      label: m.displayName,
+      color: memberColorById.get(m.id) ?? MEMBER_COLOR,
+      count: data.tasks.filter((t) => t.assigneeId === m.id).length,
     }));
-    list.push({ key: "members", label: "Komanda üzvləri", color: MEMBER_COLOR, count: data.members.length });
+    const unassignedCount = data.tasks.filter((t) => !t.assigneeId).length;
+    if (unassignedCount > 0) {
+      list.push({ key: "unassigned", label: t("graph.unassigned"), color: MUTED, count: unassignedCount });
+    }
     if (data.attachments.length > 0) {
-      list.push({ key: "attachments", label: "Fayllar", color: ATTACHMENT_COLOR, count: data.attachments.length });
+      list.push({ key: "attachments", label: t("graph.files"), color: ATTACHMENT_COLOR, count: data.attachments.length });
     }
     return list;
-  }, [data, columnColorById]);
+  }, [data, memberColorById, t]);
 
   const graphData = useMemo(() => {
     const nodes = allNodesAndLinks.nodes.filter((n) => !hiddenGroups.has(n.groupKey));
@@ -194,6 +208,9 @@ export default function GraphView({ teamId, onExit }: { teamId: string; onExit: 
           alignItems: "center",
           justifyContent: "space-between",
           padding: "10px 16px",
+          // Extra room on the right so the count text doesn't sit under the
+          // fixed power-menu button (top-right corner, present on every screen).
+          paddingRight: 60,
           borderBottom: "1px solid rgba(255,255,255,0.08)",
           background: BG,
         }}
@@ -212,26 +229,26 @@ export default function GraphView({ teamId, onExit }: { teamId: string; onExit: 
             cursor: "pointer",
           }}
         >
-          ← Board
+          {t("graph.backToBoard")}
         </button>
         <span style={{ fontSize: 12, color: MUTED }}>
           {data
-            ? `${data.tasks.length} tapşırıq · ${data.members.length} üzv · ${data.dependencies.length} asılılıq`
+            ? `${data.tasks.length} ${t("graph.tasksCount")} · ${data.members.length} ${t("graph.membersCount")} · ${data.dependencies.length} ${t("graph.dependenciesCount")}`
             : ""}
         </span>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
         <div ref={containerRef} style={{ flex: 1, minWidth: 0, minHeight: 0, position: "relative", background: BG }}>
-          {isLoading && <div style={{ padding: 24, color: MUTED }}>Yüklənir...</div>}
+          {isLoading && <div style={{ padding: 24, color: MUTED }}>{t("common.loading")}</div>}
           {isError && (
             <div style={{ padding: 24 }}>
               <div className="form-error" style={{ display: "inline-block" }}>
-                Qrafı yükləmək alınmadı.
+                {t("graph.loadError")}
               </div>
               <div style={{ marginTop: 12 }}>
                 <button className="btn-secondary" style={{ width: "auto" }} onClick={() => refetch()}>
-                  Yenidən cəhd et
+                  {t("common.retry")}
                 </button>
               </div>
             </div>
@@ -247,7 +264,12 @@ export default function GraphView({ teamId, onExit }: { teamId: string; onExit: 
                 nodeRelSize={4}
                 linkColor={(link: LinkObject) => {
                   const l = link as unknown as GLink;
-                  const base = l.kind === "dependency" ? DEP_RED : l.kind === "assignee" ? MEMBER_COLOR : ATTACHMENT_COLOR;
+                  const base =
+                    l.kind === "dependency"
+                      ? DEP_RED
+                      : l.kind === "assignee"
+                        ? memberColorById.get(endpointId(l.target)) ?? MEMBER_COLOR
+                        : ATTACHMENT_COLOR;
                   if (!focus) return hexToRgba(base, l.kind === "dependency" ? 0.6 : 0.18);
                   return hexToRgba(base, focus.connectedLinks.has(l) ? 0.9 : 0.03);
                 }}
@@ -352,7 +374,26 @@ export default function GraphView({ teamId, onExit }: { teamId: string; onExit: 
                         flexShrink: 0,
                       }}
                     >
-                      Aç
+                      {t("graph.open")}
+                    </button>
+                  )}
+                  {selectedNode.kind === "member" && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenProfile(selectedNode.id)}
+                      style={{
+                        border: "none",
+                        background: selectedNode.color,
+                        color: "#04101c",
+                        borderRadius: 6,
+                        padding: "4px 10px",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {t("graph.openProfile")}
                     </button>
                   )}
                 </div>

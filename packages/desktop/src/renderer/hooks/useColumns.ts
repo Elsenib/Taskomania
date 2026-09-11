@@ -33,3 +33,15 @@ export function useReorderColumn(teamId: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["columns", teamId] }),
   });
 }
+
+export function useRenameColumn(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ columnId, name }: { columnId: string; name: string }) =>
+      apiFetch<{ column: Column }>(`/api/v1/teams/${teamId}/columns/${columnId}`, {
+        method: "PATCH",
+        body: { name },
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["columns", teamId] }),
+  });
+}

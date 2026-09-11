@@ -19,6 +19,21 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+// For an already-authenticated user adding another team they'll admin —
+// unlike registerTeamSchema, no email/password/displayName (they have those).
+export const createAdditionalTeamSchema = z.object({
+  teamName: z.string().min(2).max(100),
+});
+
+// For an already-authenticated user joining another team as a member.
+export const joinAdditionalTeamSchema = z.object({
+  inviteCode: z.string().min(4).max(32),
+});
+
+export const switchTeamSchema = z.object({
+  teamId: z.string().uuid(),
+});
+
 export const createTaskSchema = z.object({
   columnId: z.string().uuid(),
   title: z.string().min(1).max(300),
@@ -26,6 +41,7 @@ export const createTaskSchema = z.object({
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
   dueDate: z.string().datetime().optional(),
   assigneeId: z.string().uuid().optional(),
+  projectId: z.string().uuid().nullable().optional(),
 });
 
 export const updateTaskSchema = z.object({
@@ -35,7 +51,16 @@ export const updateTaskSchema = z.object({
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
   dueDate: z.string().datetime().nullable().optional(),
   assigneeId: z.string().uuid().nullable().optional(),
+  projectId: z.string().uuid().nullable().optional(),
   order: z.number().optional(),
+});
+
+export const createProjectSchema = z.object({
+  name: z.string().min(1).max(60),
+});
+
+export const renameProjectSchema = z.object({
+  name: z.string().min(1).max(60),
 });
 
 export const createCommentSchema = z.object({
@@ -61,4 +86,19 @@ export const reorderColumnSchema = z.object({
   // Unlike createColumnSchema's afterColumnId, this is required — a reorder
   // always has an explicit new position, there's no "leave it" default.
   afterColumnId: z.string().uuid().nullable(),
+});
+
+export const renameColumnSchema = z.object({
+  name: z.string().min(1).max(50),
+});
+
+// avatarUrl carries a client-resized data: URI (see PasswordInput-adjacent
+// AvatarPicker on the desktop side) — generous cap, not a raw upload limit.
+export const updateProfileSchema = z.object({
+  displayName: z.string().min(1).max(100).optional(),
+  avatarUrl: z.string().max(500_000).nullable().optional(),
+  // Write-only marker: true records "seen now" server-side. There's no
+  // reason to ever send false — dismissing the onboarding screen is the only
+  // caller, so the schema only allows the one meaningful value.
+  onboardingSeen: z.literal(true).optional(),
 });

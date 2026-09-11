@@ -125,12 +125,273 @@ Tam plan: `.claude/plans/adaptive-discovering-swing.md` (qraf tapşırığı ü�
 - **Gotcha — DPI-scaled ekranda ekran görüntüsü səhv diaqnoza apara bilər (mühüm).** Fullscreen pəncərəni PowerShell skripti ilə yoxlayanda power menu düyməsi "görünmürdü" — CDP (`--remote-debugging-port`) ilə birbaşa yoxlanılanda elementin mövqeyi/rəngi/görünürlüyü tam DÜZGÜN idi. Səbəb: `[System.Windows.Forms.Screen]::PrimaryScreen.Bounds` DPI-farkında olmayan prosesdə **fiziki deyil, virtuallaşdırılmış (miqyaslanmış) ölçünü** qaytarır (125% miqyasda 1920×1080 real ekran 1536×864 kimi görünür), və `CopyFromScreen` yalnız bu virtuallaşdırılmış sahəni tutur — sağ/alt kənara yaxın məzmun (bizim güc düyməsi kimi) kəsilib. `SetProcessDPIAware()` (klik qaydası ilə eyni — SKILL.md-yə bax) ekran görüntüsü çəkməzdən əvvəl çağırılanda problem yox oldu; `force-device-scale-factor=1` kimi "düzəliş" əslində lazımsız idi və real istifadəçidə UI-ni fiziki kiçildərdi (səhv diaqnoza əsaslanan, geri qaytarılmış cəhd).
 - **CDP remote debugging fullscreen-də DevTools əvəzedicisi kimi**: `Taskomania.exe --remote-debugging-port=<port>` ilə işə sal, `http://localhost:<port>/json` siyahısından düzgün `webSocketDebuggerUrl`-i tap (**diqqət**: sistemdə başqa proses eyni portu tuta bilər — nəticədə gələn `title` sahəsini yoxla, "Taskomania" olmalıdır), sonra WebSocket üzərindən `Runtime.evaluate` göndər (Node 22+-da built-in `WebSocket` kifayətdir, əlavə paket lazım deyil).
 
+## Kanban iş axını — sütun iyerarxiyası, hərəkət qaydaları, tarixçə (Faza 1)
+
+Tam plan: `C:\Users\Elşen İ\.claude\plans\taskomania-kanban-workflow.md` (Faza 1-3 + təxirə salınan
+multi-team qeydi). Qısaca:
+
+- **Sütun iyerarxiyası**: `Column.type` (`ColumnType` enum: TODO/TAKE/IN_PROGRESS/TESTING/DONE/FAIL/CUSTOM)
+  + `Column.parentId` (öz-özünə əlaqə) — Testing, In Progress-in; Fail, Done-un alt-sütunudur. Yeni
+  komanda seed-i (`auth.service.ts`) bu tam iyerarxiyanı yaradır: To Do→Take→In Progress(+Testing)→
+  Done(+Fail). Mövcud (miqrasiyadan əvvəlki) komandalar üçün `prisma/backfill-columns.ts` bir dəfəlik
+  skripti (`npx tsx prisma/backfill-columns.ts`) adına görə `type` təyin edib çatışmayan Take/Testing/
+  Fail sütunlarını əlavə edir (idempotent). Sütun yaratma/sıralama route-ları (`teams.routes.ts`)
+  yalnız üst-səviyyə (`parentId: null`) sütunlarla işləyir — alt-sütunlar öz valideynlərinin daxilində
+  ayrıca sıra nömrələnməsinə malikdir, sıralamaya qarışmır.
+- **Hərəkət qaydaları** (`task.service.ts`, `assertMoveAllowed`): MEMBER yalnız öz üzərinə götürdüyü
+  taskı bir addım irəli apara bilər (To Do/Fail→Take özünə-təyinatla, Take→In Progress, In Progress→
+  Testing) — bundan artığı (Done/Fail-ə toxunma, geri addım, CUSTOM sütunlar) ADMIN-only. Tapşırıq
+  yaratma da MEMBER üçün yalnız To Do sütунuna məhdudlaşdırılıb (admin sərbəstdir).
+- **Tarixçə**: `TaskActivity` cədvəli hər uğurlu sütun-dəyişikliyini (`userId, fromColumnId, toColumnId,
+  createdAt`) qeyd edir — `GET /tasks/:taskId/activity`, `TaskActivityTimeline.tsx` (tapşırıq popup-unda,
+  "Götürüldü"/"Progressə keçdi" və s. sətirlər, `formatShortDateTime` ilə).
+- **Frontend**: `Board.tsx`/`Column.tsx` sütunları valideyn/uşaq qruplaşdırır — uşaq sütun (Testing/Fail)
+  valideynin kartı daxilində ayrıca, öz `useDroppable` hədəfinə malik nested lövhə kimi göstərilir (real
+  UI-da sürüklə-burax ilə test edilib — kart birbaşa nested Testing lövhəsinə düşüb dərhal yenilənib).
+  "Götür" düyməsi iki fərqli hərəkətə bağlanıb: To Do-dan özünə-təyinat+köçürmə, Fail-dən (admin artıq
+  təyin etdiyi şəxs üçün) sadəcə köçürmə.
+- **Şifrə göz ikonu**: `components/PasswordInput.tsx` (öz SVG-si, əlavə paket yoxdur) — Login/CreateTeam/
+  JoinTeam ekranlarında tətbiq olunub, real UI-da test edilib (şifrəni göstər/gizlət işləyir).
+- **In Progress → Testing keçidi təsdiq tələb edir.** Sadə sürüklə-burax istifadəçinin işi bitirmədən
+  səhvən/tələsik Testing-ə atmasına yol açırdı (admin sonra geri qaytarmalı olurdu — hər iki tərəf üçün
+  itirilmiş vaxt). Həll: `SendToTestingModal.tsx` məcburi qısa qeyd tələb edir ("Nə etdiniz?"), bu qeyd
+  adi şərh kimi (`useCreateComment`) əlavə olunur, YALNIZ bundan sonra sütun köçürülür. Ayrıca "göndər"
+  düyməsi YOXDUR — sürüklə-burax özü bu qapını tətbiq edir: `Board.tsx`-də `needsTestingConfirmation()`
+  `handleDragEnd`-in içində tutulur (öz tapşırığın, In Progress-dən Testing-ə) və birbaşa `updateTask`
+  çağırmaq əvəzinə modalı açır (`openSendToTesting`) — istifadəçi kartı Testing-ə buraxanda, əgər
+  qeyd yazıb təsdiqləməsə, tapşırıq faktiki köçmür (məlumat dəyişmədiyi üçün kart öz yerinə "geri
+  düşür"). Admin/digər keçidlər üçün sürüklə-burax adi qaydada birbaşa işləyir. Real UI-da tam test
+  edilib (Tarixçə + Şərhlər bölmələrində düzgün göründüyü təsdiqlənib).
+- **Gotcha — köhnə komandalarda sütun sırası backfill-dən sonra fərqli qala bilər.** Backfill mövcud
+  `order` dəyərlərini SAXLAYIR, kanonik sıraya məcburi keçirmir — əgər admin əvvəllər sütunları əl ilə
+  yenidən sıralayıbsa (məs. "Reorder Test Team"), Take/Testing/Fail düzgün yerə əlavə olunur, amma
+  ümumi sıra həmin komandanın öz xüsusi tənzimləməsini əks etdirməyə davam edir. Bu, gözlənilən
+  davranışdır (admin-in seçimini pozmamaq üçün), yalnız yeni komandalar hər zaman kanonik sırada olur.
+
+## Profil, Ayarlar, statistika (Faza 2)
+
+Tam plan: `C:\Users\Elşen İ\.claude\plans\taskomania-kanban-workflow.md`. Qısaca:
+
+- **Sxem**: `User.avatarUrl` (kiçik, klient tərəfində 160×160 kvadrat kəsilmiş JPEG `data:` URI —
+  ayrıca fayl-saxlama/serving yolu bu ölçüdə şəkil üçün artıq yükdür) və `TaskActivity.assigneeId`
+  (hərəkət anında tapşırığın kimə təyin olunduğunun snapshot-u — `TaskActivity.userId`-dən fərqli:
+  admin Testing→Done/Fail edəndə hərəkəti admin edir, amma nəticə işi görən şəxsin adına yazılmalıdır;
+  `Task.assigneeId` bunun üçün etibarsızdır, çünki uğursuz tapşırıq yenidən təyin olunanda üzərinə yazılır).
+- **Statistika** (`stats.service.ts`): uğur/uğursuzluq sayı `TaskActivity.assigneeId` + `toColumnId`-in
+  tipindən (DONE/FAIL) hesablanır (unikal `taskId` dəstləri, təkrar sayılmasın deyə). Faiz düsturu:
+  `uğurlu/(uğurlu+uğursuz)×100`, heç bir qərarlaşmış tapşırıq yoxdursa 100%. `GET /teams/:teamId/stats`
+  (bütün üzvlər üçün, hər kəs görə bilər — komanda arası müqayisə/rəqabət üçün) və
+  `GET /teams/:teamId/members/:userId/profile` (tək üzvün tam profili: stats + hazırkı/uğurlu/uğursuz
+  tapşırıq siyahıları + onun yüklədiyi fayllar).
+- **Audit**: `GET /teams/:teamId/activity` (admin-only) — bütün komandanın son 200 sütun-hərəkəti,
+  tapşırıq başlığı ilə birlikdə, `SettingsScreen.tsx`-in admin panelində göstərilir.
+- **Sütun adını dəyişmə**: `PATCH /teams/:teamId/columns/:columnId` (admin-only, `renameColumnSchema`
+  — yalnız `name`, sub-sütunlar daxil istənilən sütunu əhatə edir). Yeni `column:renamed` socket
+  event-i (`column:created`-lə eyni client-side handler-i işə salır — sadəcə `["columns", teamId]`
+  invalidasiyası).
+- **Profil sinxronu**: `PATCH /auth/me` (`updateProfileSchema`) — `member:updated` broadcast edir,
+  `useRealtimeSync.ts` bunu `["members", teamId]` keşinə patch edir; çağıran özü isə
+  `AuthContext.updateProfile()` vasitəsilə birbaşa öz `user` state-ini yeniləyir (round-trip gözləmədən).
+- **Frontend**: `ProfileScreen.tsx` (hər kəsin profilinə baxıla bilər — `TeamRoster.tsx` header-də
+  bütün üzvlərin avatarları, klik profil açır), `SettingsScreen.tsx` (tema/avatar/ad hamıya; sütun
+  adı dəyişmə + audit yalnız admin-ə), `AvatarPicker.tsx` (canvas-la kvadrat kəsmə+kiçiltmə),
+  `Avatar.tsx` (paylaşılan komponent — şəkil varsa göstərir, yoxdursa baş hərflər, `TaskCard`-da da
+  istifadə olunur ki, təyinat dairələri profil şəkli ilə uyğun olsun).
+- **Tema override** (`store/themeStore.ts`): `localStorage`-da saxlanılan seçim `<html data-theme>`
+  atributunu idarə edir; `index.css`-də OS-media-query bloku `:not([data-theme="light"])` ilə
+  qorunur (aydın "işıqlı" seçimi tünd OS-i əzir) və `[data-theme="dark"]` bloku ayrıca təkrarlanır
+  (aydın "tünd" seçimi işıqlı OS-i əzir) — hər iki istiqamətdə aydın seçim udur, "Sistem" defolt
+  olaraq OS-a əməl edir. Real UI-da hər üç vəziyyət (Sistem/İşıqlı/Tünd) test edilib.
+- Real UI-da tam test edilib: tema keçidi (OS-i əzmə daxil), sütun adını dəyişmə (real-time + audit-də
+  köhnə tarixçənin yeni adla göründüyü təsdiqlənib), ad dəyişmə (header/roster/audit-də anında əks
+  olunması), profil ekranı (statistika, tapşırıq siyahıları, komanda reytinqi).
+
+## Faza 2 cilalama turu — dil seçimi, admin gizliliyi, UI düzəlişləri
+
+- **Tam i18n (AZ/EN)**: `i18n/translations.ts` (flat key→string lüğəti, hər iki dil eyni açarları paylaşır) +
+  `i18n/useT.ts` (`useT()` hook-u, `store/localeStore.ts`-dəki seçimi oxuyur, tapılmayan açıq üçün
+  az-a, sonra açarın özünə geri qayıdır). Demək olar bütün renderer komponentləri (auth, board, task
+  modalı, şərh/asılılıq/fayl panelləri, profil, ayarlar, dəvət, power menu) bu sistemi istifadə edir.
+  **Şüurlu şəkildə xaricdə qalıb**: Qraf görünüşü (`GraphView.tsx`/`GraphLegend.tsx`) və Dizayn
+  Kanvası — bunlar daha nadir istifadə olunan, ayrıca tünd-tema alt-alətlərdir, ilkin tərcümə dalğasına
+  daxil edilməyib. Ayarlarda "Dil" seçimi (globe ikonu) Azərbaycan/İngilis arasında keçid edir, seçim
+  `localStorage`-da saxlanılır.
+- **Admin profili yalnız admin özü görə bilər**: `stats.service.ts`-də `getMemberProfile(teamId, userId,
+  callingRole)` — hədəf istifadəçi ADMIN-dirsə və çağıran ADMIN deyilsə 403 atır. `TeamRoster.tsx`
+  bunu UI-də əvvəlcədən əks etdirir (admin avatarı digər üzvlər üçün kliklənməz görünür, opacity aşağı).
+  API səviyyəsində curl ilə test edilib: üzv→admin profili = 403, üzv→öz profili = 200, admin→üzv
+  profili = 200.
+- **Admin statistikadan kənarlaşdırılıb**: `getTeamStats` sorğusu `role: "MEMBER"` filtri ilə admin-i
+  komanda reytinqindən çıxarır (admin tapşırıq icra etmir, faiz mənasızdır). `getMemberProfile` admin
+  üçün `stats: null` qaytarır; `ProfileScreen.tsx` bu halda statistika kafelini/tapşırıq siyahılarını
+  tamamilə gizlədir (yalnız "Sənədlər" bölməsi qalır). Shared tip: `MemberProfile.stats: MemberStats | null`.
+- **Sütun adı dəyişmə input-ları bərabər enlidir**: əvvəllər alt-sütun sətirləri `paddingLeft` ilə
+  bütün sətri sıxdırırdı, nəticədə input fərqli enli görünürdü. Həll: hər sətir eyni CSS grid-i
+  istifadə edir (`20px 1fr auto` — sabit girinti sütunu, çevik input, avto düymə), girinti indeks
+  sütununda "↳" işarəsi kimi göstərilir, enə təsir etmir.
+- **Audit daha səliqəli**: hər qeyd indi ayrıca kart (`var(--paper-panel)` fon, girinti) — birinci sətir
+  tapşırıq başlığı + hərəkət nişanı (rəngli), ikinci sətir kim/nə vaxt. Əvvəlki tək-sətirli sıx format
+  əvəz olundu.
+- **Ayarlar düyməsi ikonla**: header-də "Ayarlar" mətni dişli çarx SVG ikonu ilə əvəz olundu (mətn
+  yalnız `title`/`aria-label` kimi qalır).
+- Real UI-da tam test edilib: dil keçidi (bütün ekranlar anında İngilis/Azərbaycan arasında keçir),
+  admin profilində statistikanın tam yoxluğu, sütun input-larının bərabərliyi, audit kartlarının görünüşü.
+
+## Onboarding qaydalar ekranı + qrafda üzv-əsaslı rənglər (Faza 3)
+
+- **Onboarding**: `User.onboardingSeenAt DateTime?` — `null` olduqda `App.tsx` giriş edən kimi
+  `OnboardingModal.tsx`-i (6 nömrələnmiş qayda: sütun axını, Götür, Testinə göndər təsdiqi, admin
+  qərarı, profil/statistika, ayarlar) məcburi göstərir; "Anladım" düyməsi `PATCH /auth/me`
+  (`onboardingSeen: true`, `updateProfileSchema`-da literal `true` sahəsi) çağırıb bir daha görünməsin
+  deyə timestamp yazır. Öz profilindən ("İstifadə qaydaları" düyməsi, yalnız `isOwnProfile` olanda)
+  eyni modal həmişə yenidən açıla bilər — bu yol `onboardingSeen` göndərmir, sadəcə bağlanır.
+- **Qrafda üzv-əsaslı rənglər**: `GraphView.tsx` əvvəllər tapşırıq node-larını SÜTUNA görə rəngləyirdi
+  (`columnColorById`) — indi HƏR ÜZVƏ görə rəngləyir (`memberColorById`, eyni golden-angle `groupColor()`
+  funksiyası, indi üzv indeksinə görə). Tapşırığın rəngi onun `assigneeId`-inə bağlıdır (təyin
+  olunmayıbsa neytral boz), üzv node-unun özü də öz rənginə malikdir, "təyinat" xətti də eyni rənglə
+  çəkilir. Legend qrupları da sütun deyil, üzv-əsaslı oldu (+ "Təyin olunmayıb" və "Fayllar" qrupları) —
+  bir üzvü gizlətmək onun bütün tapşırıqlarını da gizlədir. **Qeyd**: Qraf ekranının mətnləri (QRUPLAR,
+  Hamısını seç və s.) hələ i18n sisteminə köçürülməyib, yalnız Azərbaycan dilindədir.
+- Real UI-da tam test edilib: onboarding həm ilk girişdə avtomatik açılıb (təsdiqləndikdən sonra server
+  tərəfdə saxlanılıb, `GET /auth/me` ilə yoxlanılıb), həm profildən yenidən açılıb; qrafda iki fərqli
+  üzvün fərqli rənglərdə (qırmızı/yaşıl) göründüyü və tapşırığın öz təyin olunan şəxsinin rənginə uyğun
+  olduğu təsdiqlənib.
+
+## İstifadəçi testindən sonra tapılan düzəlişlər
+
+- **Tapşırıq təyinatı admin-only oldu (mühüm təhlükəsizlik boşluğu).** İstifadəçi UI-də tapşırıq
+  redaktə formasındakı "Təyin edilib" `<select>`-i vasitəsilə (drag/Götür istifadə etmədən, sadəcə
+  seçib "Saxla" basaraq) istənilən tapşırığı özünə və ya başqasına təyin edə bildiyini aşkarladı —
+  `updateTask`-da `assigneeId` dəyişikliyi yalnız `columnId` DƏYİŞƏNDƏ yoxlanılırdı
+  (`assertMoveAllowed`), sadə təyinat dəyişikliyi heç yoxlanmırdı. Həll: yeni
+  `assertAssigneeChangeAllowed()` (`task.service.ts`) — ADMIN sərbəstdir, MEMBER üçün YALNIZ Take
+  hərəkətinin bir hissəsi kimi öz üzərinə götürmə (`targetColumn.type==="TAKE" && yeni
+  assigneeId===özü`) icazəlidir, əks halda 403. Eyni qayda `createTask`-a da tətbiq olundu (member
+  yeni tapşırıq yaradanda `assigneeId` göndərə bilməz). Frontend: `TaskDetailModal.tsx`-də admin
+  olmayanlar üçün təyinat sahəsi redaktə olunmayan mətnə çevrildi (dropdown yalnız admin görür).
+  API ilə test edilib: member-in özünə təyinat cəhdi 403, admin-in Take-vasitəsilə özünə götürməsi 200.
+- **Tapşırıq silmə admin-only oldu.** `DELETE /tasks/:taskId` marşrutuna `requireAdmin` əlavə olundu
+  (əvvəllər istənilən authenticated istifadəçi silə bilirdi). `TaskDetailModal.tsx`-də "Sil" düyməsi
+  yalnız admin-ə göstərilir. API ilə test edilib (member cəhdi → 403).
+- **Power-menu düyməsi Qraf və Ayarlar ekranlarında mətnin üstünə düşürdü.** Hər ikisi öz başlıq
+  sətirlərini idarə edir, `app-header`-in mövcud "sağda güc-menyusu üçün yer saxla" konvensiyasını
+  paylaşmırdı. Həll: `GraphView.tsx`-in başlıq sətrinə `paddingRight:60`, `SettingsScreen.tsx`-in
+  panelinə `paddingTop:56` (üfüqi yer azdır, panel tam sağ kənarda olduğu üçün şaquli aralama daha
+  etibarlı).
+- **Qraf ekranı tam tərcümə edildi** (`GraphView.tsx`, `GraphLegend.tsx`) — əvvəllər i18n-dən kənarda
+  saxlanılmışdı, indi digər ekranlarla eyni `useT()` sistemini istifadə edir.
+- **Qrafda üzv node-una klik → profil modalı.** Seçilmiş üzv node-unun alt-kartına "Profili aç"
+  düyməsi əlavə olundu (tapşırıq node-unun "Aç" düyməsi ilə eyni naxış) — `ProfileScreen.tsx`-i
+  Qraf üzərində overlay kimi açır, `GraphView`-in öz state-i (`profileUserId`) ilə idarə olunur.
+- **"Testinə" → "Testingə" yazı səhvi düzəldildi** (3 yerdə: `testFlow.title`, `testFlow.submitFailed`,
+  `onboarding.rule3Title` — "g" hərfi düşmüşdü).
+- Real UI-da (həm admin, həm real member hesabı ilə) tam test edilib.
+
+## Kanvas — komanda-səviyyəli, hər üzvün öz dizayn kanvası
+
+Əvvəllər Kanvas yalnız tək bir tapşırığın fayl əlavələrini göstərən müvəqqəti modal idi
+(`AttachmentPanel.tsx`-dəki "Kanvasda bax" düyməsi). İstifadəçinin bunun əslində vacib bir alət
+olduğunu bildirməsindən sonra top-level, komanda-səviyyəli görünüşə çevrildi:
+
+- **Backend**: `GET /teams/:teamId/attachments` (yeni, `teams.routes.ts`) — komandanın BÜTÜN fayl
+  əlavələrini qaytarır (mövcud `attachmentService.listTeamAttachments`-i təkrar istifadə edir),
+  heç bir rol məhdudiyyəti yoxdur (admin dəqiqliyi olan profil kimi deyil — hər kəs hər kəsin
+  kanvasına baxa bilər, istifadəçinin öz tələbinə görə).
+- **Frontend**: `canvas/CanvasBrowserScreen.tsx` (yeni, `App.tsx`-də üçüncü top-level `viewMode`,
+  Qraf ilə eyni səviyyədə) — header-də bütün üzvlərin tab-ları ("Kimin kanvası:"), seçilən üzvün
+  `uploadedById`-inə görə filtrlənmiş fayllar mövcud `DesignCanvas.tsx` komponentinə ötürülür.
+  `DesignCanvas.tsx`-ə yeni `extraHeaderContent` proп-u əlavə olundu ki, həm köhnə tək-tapşırıq
+  modalı (`AttachmentPanel`-dən, proп-suz), həm də yeni kanvas-brauzer (üzv tab-ları ilə) eyni
+  pan/zoom/frame kodunu təkrarsız paylaşsın.
+- **Header**: yeni ikon-düymə (şəkil ikonu) "Qraf" ilə "Ayarlar" arasında, `t("canvas.navTitle")`
+  tooltip-i ilə.
+- `DesignCanvas.tsx` bu turda tam tərcümə edildi (əvvəllər i18n-dən kənar qalmışdı).
+- **Qeyd**: bu ilk versiyadır — istifadəçi bu aləti gələcəkdə təkminləşdirəcəklərini bildirib
+  (məs. sərbəst yerləşdirmə/redaktə, kateqoriyalar və s. hələ yoxdur, sadəcə fayllar avtomatik
+  grid-ə düzülür).
+- Real UI-da test edilib: fayl yükləyən üzvün kanvasında görünməsi, tab-lar arası keçid (fərqli
+  üzvlərin fərqli fayllarını göstərməsi), boş vəziyyət mesajı.
+
+## Multi-team dəstəyi
+
+Ən böyük struktur dəyişikliyi: `User.teamId`/`role` (tək, dəyişməz sahələr) əvəzinə hər istifadəçi
+istənilən sayda komandaya aid ola bilər, hər komandada fərqli rolla.
+
+- **Sxem**: yeni `TeamMembership` cədvəli (`userId, teamId, role, joinedAt, lastActiveAt`,
+  `@@unique([userId, teamId])`) — üzvlük/rol üçün əsl mənbə. Miqrasiya 3 addımda edildi (data
+  itkisinin qarşısını almaq üçün): (1) `TeamMembership` əlavə edildi (`User.teamId/role` saxlanılaraq),
+  (2) `backfill-team-memberships.ts` bütün mövcud İstifadəçilərin `teamId/role`-unu uyğun
+  `TeamMembership` sətrinə köçürdü, (3) yalnız bundan sonra `User.teamId/role` silindi (əl ilə
+  yazılmış SQL miqrasiyası, `prisma migrate dev` data-itkisi xəbərdarlığı ilə qeyri-interaktiv
+  mühitdə uğursuz olduğu üçün `prisma migrate diff` + `migrate deploy` istifadə olundu).
+- **JWT = "aktiv komanda"**: token forması (`{userId, teamId, role}`) DƏYİŞMƏDİ — sadəcə mənbəyi
+  indi `TeamMembership`-dir, JWT özü "bu sessiya hazırda hansı komandada, hansı rolla işləyir"
+  mənasını daşıyır. Bu sayədə `requireAdmin`, bütün mövcud `req.auth!.teamId`-ə əsaslanan marşrutlar
+  demək olar toxunulmadı.
+- **Yeni auth endpoint-ləri** (`auth.routes.ts`/`auth.service.ts`):
+  - `GET /auth/my-teams` — cari istifadəçinin bütün üzvlükləri (keçid menyusu üçün).
+  - `POST /auth/teams` — daxil olmuş istifadəçi üçün ƏLAVƏ komanda yaradır (admin olur), yeni token.
+  - `POST /auth/teams/join` — daxil olmuş istifadəçi dəvət kodu ilə ƏLAVƏ komandaya üzv olur.
+  - `POST /auth/switch-team` — mövcud üzvlüklərdən birinə keçid, yeni token (yenidən giriş lazım deyil).
+  - `POST /auth/leave-team` — qoruyucularla: (a) son komandanızı tərk edə bilməzsiniz (əvvəlcə başqa
+    birinə qoşulun/yaradın — "teamless" sessiya vəziyyətinin qarşısını alır), (b) yeganə admin
+    olduğunuz komandanı tərk edə bilməzsiniz (hələ "üzvü admin et" funksiyası olmadığından, komanda
+    "sahibsiz" qalardı). `login()` istifadəçinin `lastActiveAt`-ə görə ən son aktiv olduğu komandanı
+    avtomatik seçir.
+- **Digər servislər**: `assertAssigneeInTeam` (task.service.ts), `getTeamStats`/`getMemberProfile`
+  (stats.service.ts), `/:teamId/members` və `/:teamId/graph` (teams.routes.ts) — hamısı
+  `prisma.user.findMany({teamId})` əvəzinə `prisma.teamMembership` üzərindən sorğulanır.
+- **Frontend**: `components/TeamSwitcher.tsx` (header-də, bina ikonu + cari komanda adı) — açılan
+  panel: komandalar siyahısı (rolla), "+ Yeni komanda yarat", "+ Dəvət kodu ilə qoşul" (hər ikisi
+  panel daxilində inline forma), "Bu komandanı tərk et" (yalnız 2+ komanda olanda görünür). Komanda
+  dəyişəndə `AuthContext`-in mövcud `applyAuth()` axını (token+user yenilə, socket-i yenidən qoş)
+  təkrar istifadə olunur — React Query açarları onsuz da `teamId`-ə görə olduğundan başqa heç bir
+  keş təmizləmə lazım deyil.
+- Real UI-da tam test edilib: eyni istifadəçi bir komandada Üzv, yaratdığı başqa komandada Admin
+  (rol komanda-spesifik), iki istiqamətli keçid, yeganə admin qadağası, son-komanda qadağasının əksi
+  olaraq adi üzvün uğurla tərk edib qalan komandaya avtomatik keçməsi, dəvət kodu ilə əvvəlki
+  komandaya yenidən qoşulma.
+
 ## Sütunları sürüşdürərək sıralama
 
 - **Backend**: `PATCH /teams/:teamId/columns/:columnId/reorder` (admin-only, `requireAdmin`) — `POST /columns`-un insert-after məntiqini (bax yuxarı, `createColumnSchema`) təkrar istifadə edir, amma MÖVCUD sütunu köçürür: sütunu siyahıdan çıxarır, `afterColumnId`-ə görə (yaxud `null` = ən əvvələ) yenidən yerləşdirir, bütün `order` dəyərlərini bir tranzaksiyada sıx 0..n-1 ardıcıllığına salır (`Column.order` — `Task.order`-dan fərqli olaraq `Int`-dir, kəsr araya-əlavə mümkün deyil). `column:reordered` (tam sütun siyahısı ilə) broadcast edilir; `useRealtimeSync.ts`-də `column:created`-lə eyni sxemlə (`["columns", teamId]` invalidasiyası) qəbul edilir.
 - **Frontend**: `@dnd-kit/sortable` + `@dnd-kit/utilities` əlavə edildi (əvvəllər yalnız `@dnd-kit/core` var idi, tapşırıq sürükləməsi üçün). `Board.tsx`-in MÖVCUD `DndContext`-i həm tapşırıq, həm sütun sürükləməsini idarə edir — eyni kontekstdə iki fərqli sürükləmə növünü ayırmaq üçün `useDraggable`/`useSortable`-a `data: {type: "task" | "column"}` verilib, `handleDragEnd` bunu yoxlayıb müvafiq məntiqə keçir.
 - **Gotcha — eyni `DndContext`-də iki fərqli drop-hədəfi eyni id ilə toqquşur.** `Column.tsx`-də tapşırıq-buraxma hədəfi (`useDroppable({id: column.id})`, mövcud) və sütun-sıralama sortable-ı (`useSortable({id: ...})`, yeni) EYNİ id-ni paylaşsaydı, ikinci qeydiyyat birincinin qeyd olunmuş rect-ini səssizcə əvəz edərdi (dnd-kit-in daxili registry-si id üzrə vahid map-dir, iki fərqli hook çağırışı — hətta fərqli DOM node-lara bağlı olsalar belə — eyni id ilə toqquşur). Həll: sütun-sıralama `col-${column.id}` prefiksli id istifadə edir (həm `SortableContext`-in `items`-ində, həm `useSortable`-da), tapşırıq-buraxma hədəfi isə xam `column.id`-ni saxlayır (dəyişməyib) — `handleDragEnd`-də sütun sürükləməsi aşkarlananda prefiks silinir.
 - **Draq handle yalnız başlıq**: bütün sütun deyil, yalnız sütun başlığı (`{...attributes} {...listeners}`) sürükləmə handle-ıdır — əks halda tapşırıq siyahısı daxilində klikləmə/scroll ilə toqquşardı. `disabled: !canReorder` (yəni admin olmayanlar üçün) sortable-ı tamamilə söndürür, cursor da `default` qalır.
+
+## Layihə etiketi və filter
+
+Bir komanda eyni vaxtda bir neçə fərqli layihə/müştəri üzərində işləyəndə tapşırıqların eyni
+sütunlarda (To Do/Take/...) qarışmasının qarşısını almaq üçün: ağır bir "hər layihəyə öz sütun
+dəsti" yanaşması əvəzinə, yüngül bir etiket + filter əlavə edildi.
+
+- **Sxem**: yeni `Project` modeli (`id, teamId, name, createdAt`) — heç bir rəng sahəsi YOXDUR.
+  `Task.projectId` (nullable, `onDelete: SetNull`) — layihə silinəndə tapşırıqlar sadəcə etiketsiz
+  qalır, özləri toxunulmaz qalır. Miqrasiya tam əlavə xarakterlidir (yeni cədvəl + nullable sütun),
+  data itkisi riski yoxdur.
+- **Rəng: saxlanmır, hesablanır.** Hər layihənin rəngi onun komandanın layihə siyahısındakı
+  mövqeyindən (indeksindən) törəyir — Qraf görünüşündəki üzv-rəngləri ilə eyni "qızıl bucaq" (golden
+  angle) HSL sxemi (`hsl((i * 137.508) % 360, 62%, 58%)`), indi `lib/color.ts`-də `groupColor()`
+  adı ilə ortaq çıxarılıb (əvvəllər `GraphView.tsx`-ə həbs olunmuşdu). Bu sayədə istənilən sayda
+  layihə üçün "maraqlı", bir-birindən yaxşı ayrılan rənglər alınır, heç bir əlavə state/kitabxana
+  saxlamadan — server heç vaxt rəng barədə düşünmür, client hər yerdə (TaskCard, Settings siyahısı,
+  Board filteri) eyni sırala + eyni funksiya ilə eyni rəngi yenidən hesablayır.
+- **Backend**: `project.service.ts` (list/create/rename/delete + `assertProjectInTeam`),
+  `teams.routes.ts`-də `GET/POST /:teamId/projects`, `PATCH/DELETE /:teamId/projects/:projectId`
+  (mutasiyalar admin-only, `requireAdmin` — Sütunlarla eyni bölgü). Tapşırığı bir layihəyə etiketləmək
+  isə İCAZƏ məsələsi deyil, sırf təşkilatlanma — `createTaskSchema`/`updateTaskSchema`-ya əlavə
+  olunan `projectId` istənilən rol tərəfindən dəyişdirilə bilər (admin-only deyil).
+- **Frontend**: `hooks/useProjects.ts` (useColumns ilə eyni React Query naxışı),
+  `SettingsScreen.tsx`-də admin-only "Layihələr" bölməsi (rəngli nöqtə + ad + Sil, aşağıda ad
+  input-u + "Əlavə et"), `TaskDetailModal.tsx`-də hər rol üçün açıq "Layihə" seçici,
+  `TaskCard.tsx`-də kartın başlığından əvvəl kiçik rəngli nöqtə+ad etiketi (yalnız `projectId`
+  varsa), `Board.tsx`-də axtarış qutusunun yanında layihə filteri (Bütün layihələr / Layihəsiz /
+  hər bir layihə — mövcud axtarış filtrasiyasının üstünə əlavə olunur, ikisi eyni vaxtda işləyir).
+  `ProjectTag` tipi (`board/projectTag.ts`) Board-da bir dəfə hesablanıb Column → TaskCard-a ötürülür
+  — TaskCard özü `useProjects`-i heç vaxt çağırmır.
+- Socket: `project:created`/`project:renamed`/`project:deleted` (Sütunlarla eyni broadcast+patch
+  naxışı, `useRealtimeSync.ts`); layihə silinəndə əlaqəli `tasks` sorğusu da invalidasiya olunur ki,
+  kartlardakı köhnə etiket dərhal yox olsun.
 
 ## Gotchas
 

@@ -2,10 +2,15 @@ import { useEffect, useState, type CSSProperties } from "react";
 import type { Priority, Task, User } from "@team-tracker/shared";
 import { useUiStore } from "../store/uiStore";
 import { useCreateTask, useDeleteTask, useUpdateTask } from "../hooks/useTasks";
+import { useColumns } from "../hooks/useColumns";
+import { useProjects } from "../hooks/useProjects";
 import { ApiError } from "../api/client";
 import CommentThread from "./CommentThread";
 import AttachmentPanel from "./AttachmentPanel";
 import DependencyPanel from "./DependencyPanel";
+import TaskActivityTimeline from "./TaskActivityTimeline";
+import { useT } from "../i18n/useT";
+import { useAuth } from "../auth/AuthContext";
 
 const inputStyle: CSSProperties = {
   width: "100%",
@@ -32,10 +37,16 @@ interface Props {
 }
 
 export default function TaskDetailModal({ teamId, task, newTaskColumnId, members, allTasks }: Props) {
+  const t = useT();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const closeModal = useUiStore((s) => s.closeModal);
   const createTask = useCreateTask(teamId);
   const updateTask = useUpdateTask(teamId);
   const deleteTask = useDeleteTask(teamId);
+  const { data: columns } = useColumns(teamId);
+  const { data: projects } = useProjects(teamId);
+  const membersById = new Map(members.map((m) => [m.id, m]));
 
   const isNew = !task;
 
@@ -44,6 +55,7 @@ export default function TaskDetailModal({ teamId, task, newTaskColumnId, members
   const [priority, setPriority] = useState<Priority>(task?.priority ?? "MEDIUM");
   const [dueDate, setDueDate] = useState(toDateInputValue(task?.dueDate ?? null));
   const [assigneeId, setAssigneeId] = useState(task?.assigneeId ?? "");
+  const [projectId, setProjectId] = useState(task?.projectId ?? "");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,6 +64,7 @@ export default function TaskDetailModal({ teamId, task, newTaskColumnId, members
     setPriority(task?.priority ?? "MEDIUM");
     setDueDate(toDateInputValue(task?.dueDate ?? null));
     setAssigneeId(task?.assigneeId ?? "");
+    setProjectId(task?.projectId ?? "");
   }, [task]);
 
   const saving = createTask.isPending || updateTask.isPending;
@@ -70,7 +83,8 @@ export default function TaskDetailModal({ teamId, task, newTaskColumnId, members
           description: description.trim() || undefined,
           priority,
           dueDate: dueDateIso,
-          assigneeId: assigneeId || undefined,
+          projectId: projectId || undefined,
+          ...(isAdmin && { assigneeId: assigneeId || undefined }),
         });
         closeModal();
       } else {
@@ -81,13 +95,14 @@ export default function TaskDetailModal({ teamId, task, newTaskColumnId, members
             description: description.trim() || null,
             priority,
             dueDate: dueDateIso ?? null,
-            assigneeId: assigneeId || null,
+            projectId: projectId || null,
+            ...(isAdmin && { assigneeId: assigneeId || null }),
           },
         });
         // stay open after editing an existing task so comments remain reachable
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Yadda saxlamaq alınmadı");
+      setError(err instanceof ApiError ? err.message : t("common.saveFailed"));
     }
   }
 
@@ -98,7 +113,7 @@ export default function TaskDetailModal({ teamId, task, newTaskColumnId, members
       await deleteTask.mutateAsync(task.id);
       closeModal();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Silmək alınmadı");
+      setError(err instanceof ApiError ? err.message : t("common.deleteFailed"));
     }
   }
 
@@ -129,18 +144,18 @@ export default function TaskDetailModal({ teamId, task, newTaskColumnId, members
         onClick={(e) => e.stopPropagation()}
       >
         <h3 style={{ margin: "0 0 20px", fontWeight: 600, fontSize: 16, color: "var(--ink)" }}>
-          {isNew ? "Yeni tapşırıq" : "Tapşırığı redaktə et"}
+          {isNew ? t("task.newTitle") : t("task.editTitle")}
         </h3>
 
         {error && <div className="form-error">{error}</div>}
 
         <div className="field">
-          <label>Başlıq</label>
+          <label>{t("task.titleLabel")}</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus style={inputStyle} />
         </div>
 
         <div className="field">
-          <label>Təsvir</label>
+          <label>{t("task.description")}</label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -151,52 +166,73 @@ export default function TaskDetailModal({ teamId, task, newTaskColumnId, members
 
         <div style={{ display: "flex", gap: 14 }}>
           <div className="field" style={{ flex: 1 }}>
-            <label>Prioritet</label>
+            <label>{t("task.priority")}</label>
             <select value={priority} onChange={(e) => setPriority(e.target.value as Priority)} style={inputStyle}>
-              <option value="LOW">Aşağı</option>
-              <option value="MEDIUM">Orta</option>
-              <option value="HIGH">Yüksək</option>
+              <option value="LOW">{t("priority.low")}</option>
+              <option value="MEDIUM">{t("priority.medium")}</option>
+              <option value="HIGH">{t("priority.high")}</option>
             </select>
           </div>
           <div className="field" style={{ flex: 1 }}>
-            <label>Son tarix</label>
+            <label>{t("task.dueDate")}</label>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={inputStyle} />
           </div>
         </div>
 
         <div className="field">
-          <label>Təyin edilib</label>
-          <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} style={inputStyle}>
-            <option value="">— Kimsə təyin edilməyib —</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.displayName}
+          <label>{t("task.project")}</label>
+          <select value={projectId} onChange={(e) => setProjectId(e.target.value)} style={inputStyle}>
+            <option value="">{t("task.noProject")}</option>
+            {(projects ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
               </option>
             ))}
           </select>
         </div>
 
+        <div className="field">
+          <label>{t("task.assignee")}</label>
+          {isAdmin ? (
+            <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} style={inputStyle}>
+              <option value="">{t("task.unassigned")}</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.displayName}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div style={{ ...inputStyle, color: "var(--muted)", background: "var(--paper-panel)" }}>
+              {task?.assigneeId ? membersById.get(task.assigneeId)?.displayName ?? "—" : t("task.unassigned")}
+            </div>
+          )}
+        </div>
+
         <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
           <button className="btn-primary" disabled={saving || !title.trim()} onClick={handleSave}>
-            {saving ? "Saxlanılır..." : "Saxla"}
+            {saving ? t("common.saving") : t("common.save")}
           </button>
-          {!isNew && (
+          {!isNew && isAdmin && (
             <button
               className="btn-secondary"
               style={{ width: "auto", color: "var(--priority-high-ink)" }}
               onClick={handleDelete}
               disabled={deleteTask.isPending}
             >
-              Sil
+              {t("common.delete")}
             </button>
           )}
           <button className="btn-secondary" style={{ width: "auto" }} onClick={closeModal}>
-            Bağla
+            {t("common.close")}
           </button>
         </div>
 
         {!isNew && <DependencyPanel task={task} allTasks={allTasks} />}
         {!isNew && <AttachmentPanel taskId={task.id} members={members} />}
+        {!isNew && (
+          <TaskActivityTimeline taskId={task.id} columns={columns ?? []} membersById={membersById} />
+        )}
         {!isNew && <CommentThread taskId={task.id} members={members} />}
       </div>
     </div>

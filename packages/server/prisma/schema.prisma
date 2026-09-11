@@ -23,14 +23,46 @@ enum AttachmentKind {
   ARCHIVE
 }
 
+enum ColumnType {
+  TODO
+  TAKE
+  IN_PROGRESS
+  TESTING
+  DONE
+  FAIL
+  CUSTOM
+}
+
 model Team {
-  id        String    @id @default(uuid())
-  name      String
-  createdAt DateTime  @default(now())
-  users     User[]
-  invites   Invite[]
-  columns   Column[]
-  tasks     Task[]
+  id          String           @id @default(uuid())
+  name        String
+  createdAt   DateTime         @default(now())
+  memberships TeamMembership[]
+  invites     Invite[]
+  columns     Column[]
+  tasks       Task[]
+  projects    Project[]
+}
+
+// One user can belong to several teams (a different role in each) — this is
+// the source of truth for team membership/role. The JWT carries one
+// "active team" at a time (see middleware/auth.ts AuthPayload); switching
+// teams just re-issues a token scoped to a different membership.
+model TeamMembership {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId       String
+  team         Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  role         Role     @default(MEMBER)
+  joinedAt     DateTime @default(now())
+  // Bumped on login/switch — lets us default to "whichever team you used
+  // last" instead of an arbitrary one when a session doesn't pick explicitly.
+  lastActiveAt DateTime @default(now())
+
+  @@unique([userId, teamId])
+  @@index([userId])
+  @@index([teamId])
 }
 
 model User {
@@ -38,17 +70,21 @@ model User {
   email          String    @unique
   passwordHash   String
   displayName    String
-  role           Role      @default(MEMBER)
+  // Small (client-resized) image stored as a data: URI directly on the row —
+  // avatars are tiny enough that a dedicated file-storage/serving path (like
+  // Attachment has) would be pure overhead for this feature.
+  avatarUrl      String?
+  // Set the first time the user dismisses the onboarding/rules screen — null
+  // means "show it on next login". Re-openable anytime from their own
+  // profile, which just displays the same content without touching this.
+  onboardingSeenAt DateTime?
   createdAt      DateTime  @default(now())
-  teamId         String
-  team           Team      @relation(fields: [teamId], references: [id])
+  memberships    TeamMembership[]
   createdInvites Invite[]  @relation("InviteCreatedBy")
   assignedTasks  Task[]    @relation("TaskAssignee")
   createdTasks   Task[]    @relation("TaskCreatedBy")
   comments       Comment[]
   attachments    Attachment[]
-
-  @@index([teamId])
 }
 
 model Invite {
@@ -64,15 +100,43 @@ model Invite {
   @@index([teamId])
 }
 
+// Lets one team keep several concurrent projects (e.g. three different
+// clients) from mixing together in the same columns — a lightweight tag on
+// each task plus a board filter, rather than a whole separate column set
+// per project. Color isn't stored: the client derives it from the project's
+// position in this list (same golden-angle scheme as per-member graph colors),
+// so it stays "interesting"/well-separated with zero extra state to manage.
+model Project {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@unique([teamId, name])
+  @@index([teamId])
+}
+
 model Column {
-  id     String @id @default(uuid())
+  id     String     @id @default(uuid())
   name   String
+  type   ColumnType @default(CUSTOM)
   order  Int
   teamId String
-  team   Team   @relation(fields: [teamId], references: [id])
+  team   Team       @relation(fields: [teamId], references: [id])
   tasks  Task[]
 
+  // Sub-column support (e.g. Testing under In Progress, Fail under Done).
+  // `order` is scoped within siblings sharing the same parentId — top-level
+  // columns (parentId null) and each parent's children are numbered 0..n-1
+  // independently, not as one flat sequence.
+  parentId String?
+  parent   Column?  @relation("ColumnChildren", fields: [parentId], references: [id])
+  children Column[] @relation("ColumnChildren")
+
   @@index([teamId])
+  @@index([parentId])
 }
 
 model Task {
@@ -94,16 +158,44 @@ model Task {
   assigneeId String?
   assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
 
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
   createdById String
   createdBy   User   @relation("TaskCreatedBy", fields: [createdById], references: [id])
 
   comments    Comment[]
   attachments Attachment[]
+  activities  TaskActivity[]
   blockingOf  TaskDependency[] @relation("BlockingTask")
   blockedBy   TaskDependency[] @relation("BlockedTask")
 
   @@index([teamId, columnId])
   @@index([assigneeId])
+  @@index([projectId])
+}
+
+// Records every column move a task goes through — powers the "picked up
+// at / moved to progress at" timeline in the task detail popup, and later
+// the admin audit view. userId/fromColumnId/toColumnId are plain ids (no
+// relation) since callers already have members/columns cached client-side
+// to resolve names, and it keeps this table decoupled from column deletion.
+model TaskActivity {
+  id           String   @id @default(uuid())
+  taskId       String
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId       String
+  fromColumnId String?
+  toColumnId   String
+  // Snapshot of the task's assignee at the moment of this move (not
+  // necessarily `userId` — an admin approving/failing a task moves it, but
+  // the outcome should count against whoever it was assigned to). Success/
+  // fail stats are computed from this, not from Task.assigneeId, since that
+  // field gets overwritten on reassignment after a Fail.
+  assigneeId   String?
+  createdAt    DateTime @default(now())
+
+  @@index([taskId])
 }
 
 model TaskDependency {

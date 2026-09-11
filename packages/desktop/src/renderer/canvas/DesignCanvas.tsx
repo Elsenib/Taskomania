@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Attachment } from "@team-tracker/shared";
 import { attachmentContentUrl } from "../hooks/useAttachments";
 import { isImageFile } from "../lib/fileKind";
+import { useT } from "../i18n/useT";
 
 const MIN_SCALE = 0.2;
 const MAX_SCALE = 3;
@@ -17,11 +18,18 @@ export default function DesignCanvas({
   attachments,
   onClose,
   onOpenAttachment,
+  extraHeaderContent,
 }: {
   attachments: Attachment[];
   onClose: () => void;
   onOpenAttachment: (attachment: Attachment) => void;
+  // Lets a caller (the per-member canvas browser) inject its own controls —
+  // e.g. a member switcher — into the header without DesignCanvas needing to
+  // know anything about that use case. The per-task "Kanvasda bax" caller
+  // just omits this.
+  extraHeaderContent?: ReactNode;
 }) {
+  const t = useT();
   const viewportRef = useRef<HTMLDivElement>(null);
   const [transform, setTransform] = useState<Transform>({ x: 60, y: 60, scale: 1 });
   const dragRef = useRef<{ startClientX: number; startClientY: number; originX: number; originY: number } | null>(
@@ -95,18 +103,24 @@ export default function DesignCanvas({
           alignItems: "center",
           justifyContent: "space-between",
           padding: "10px 16px",
+          // Extra room on the right so the zoom/fit controls don't sit under
+          // the fixed power-menu button (top-right corner, present on every screen).
+          paddingRight: 60,
           background: "var(--card)",
           borderBottom: "1px solid var(--border)",
           zIndex: 1,
         }}
       >
-        <button className="btn-secondary" style={{ width: "auto", padding: "5px 12px", fontSize: 12 }} onClick={onClose}>
-          ← Bağla
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button className="btn-secondary" style={{ width: "auto", padding: "5px 12px", fontSize: 12 }} onClick={onClose}>
+            {t("common.close")}
+          </button>
+          {extraHeaderContent}
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontSize: 12, color: "var(--muted)" }}>{Math.round(transform.scale * 100)}%</span>
           <button className="btn-secondary" style={{ width: "auto", padding: "5px 12px", fontSize: 12 }} onClick={resetView}>
-            Uyğunlaşdır
+            {t("canvas.fitView")}
           </button>
         </div>
       </div>
@@ -127,9 +141,7 @@ export default function DesignCanvas({
         }}
       >
         {designFiles.length === 0 ? (
-          <div style={{ padding: 40, color: "var(--muted)", fontSize: 13 }}>
-            Kanvasda göstəriləcək dizayn faylı yoxdur (şəkil və ya HTML fayl əlavə et).
-          </div>
+          <div style={{ padding: 40, color: "var(--muted)", fontSize: 13 }}>{t("canvas.empty")}</div>
         ) : (
           <div
             style={{
