@@ -23,3 +23,7 @@ uploads/
 # build output, so they're tracked despite the blanket rule above.
 !packages/desktop/build/
 !packages/desktop/build/**
+
+# Code-signing certificate (private key + password) — never commit this,
+# even for a self-signed cert. Generated locally, kept out of git entirely.
+packages/desktop/certs/
