@@ -22,7 +22,7 @@ import TaskDetailModal from "../task/TaskDetailModal";
 import SendToTestingModal from "../task/SendToTestingModal";
 import { useT } from "../i18n/useT";
 import { groupColor } from "../lib/color";
-import type { ProjectTag } from "./projectTag";
+import { projectIcon, type ProjectTag } from "./projectTag";
 import type { Task } from "@team-tracker/shared";
 
 export default function Board({ teamId }: { teamId: string }) {
@@ -94,7 +94,7 @@ export default function Board({ teamId }: { teamId: string }) {
 
   const membersById = new Map((members ?? []).map((m) => [m.id, m]));
   const projectsById = new Map<string, ProjectTag>(
-    (projects ?? []).map((p, i) => [p.id, { name: p.name, color: groupColor(i) }])
+    (projects ?? []).map((p, i) => [p.id, { name: p.name, color: groupColor(i), Icon: projectIcon(p.id) }])
   );
 
   // Sub-columns (Testing under In Progress, Fail under Done) render nested

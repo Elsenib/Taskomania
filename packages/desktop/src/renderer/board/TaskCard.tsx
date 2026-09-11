@@ -41,7 +41,7 @@ function TaskCardVisual({ task, assignee, project, lifted, onTake }: CardVisualP
     >
       {project && (
         <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: project.color, flexShrink: 0 }} />
+          <project.Icon size={11} color={project.color} strokeWidth={2.5} style={{ flexShrink: 0 }} />
           <span
             style={{
               fontSize: 10.5,

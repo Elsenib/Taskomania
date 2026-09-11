@@ -10,6 +10,7 @@ import AvatarPicker from "../components/AvatarPicker";
 import { ApiError } from "../api/client";
 import { formatShortDateTime } from "../lib/formatDate";
 import { groupColor } from "../lib/color";
+import { projectIcon } from "../board/projectTag";
 import { useT } from "../i18n/useT";
 import type { TranslationKey } from "../i18n/translations";
 import type { Column } from "@team-tracker/shared";
@@ -97,11 +98,11 @@ function AdminProjectsSection({ teamId }: { teamId: string }) {
       {(projects ?? []).length === 0 && (
         <div style={{ fontSize: 12, color: "var(--muted)" }}>{t("settings.projectsEmpty")}</div>
       )}
-      {(projects ?? []).map((project, i) => (
+      {(projects ?? []).map((project, i) => {
+        const Icon = projectIcon(project.id);
+        return (
         <div key={project.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span
-            style={{ width: 9, height: 9, borderRadius: "50%", background: groupColor(i), flexShrink: 0 }}
-          />
+          <Icon size={14} color={groupColor(i)} strokeWidth={2.5} style={{ flexShrink: 0 }} />
           <span style={{ flex: 1, fontSize: 13, color: "var(--ink)" }}>{project.name}</span>
           <button
             className="btn-secondary"
@@ -112,7 +113,8 @@ function AdminProjectsSection({ teamId }: { teamId: string }) {
             {t("common.delete")}
           </button>
         </div>
-      ))}
+        );
+      })}
       <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
         <input
           value={name}
