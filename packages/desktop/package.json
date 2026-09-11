@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Taskomania - team task tracking desktop app",
-  "author": "Taskomania",
+  "author": "Dastan Studio",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
