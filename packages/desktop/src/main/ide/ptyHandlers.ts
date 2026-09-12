@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from "electron";
+import { ipcMain, BrowserWindow, shell } from "electron";
 import os from "os";
 import type { IPty } from "node-pty";
 
@@ -66,6 +66,15 @@ export function registerPtyHandlers() {
   ipcMain.on("pty:kill", (_event, sessionId: string) => {
     sessions.get(sessionId)?.proc.kill();
     sessions.delete(sessionId);
+  });
+
+  // Backs both the terminal's clickable-link addon (xterm's own output, e.g.
+  // a dev server URL a user typed `npm run dev` to start) and the detected
+  // dev-server banner button in TerminalPane.tsx — restricted to http(s) so
+  // this can't be used to launch arbitrary protocol handlers/local files.
+  ipcMain.handle("shell:openExternal", (_event, url: string): void => {
+    if (!/^https?:\/\//i.test(url)) return;
+    shell.openExternal(url);
   });
 }
 

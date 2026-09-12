@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld("ideAPI", {
   ptyResize: (sessionId: string, cols: number, rows: number): void =>
     ipcRenderer.send("pty:resize", { sessionId, cols, rows }),
   ptyKill: (sessionId: string): void => ipcRenderer.send("pty:kill", sessionId),
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke("shell:openExternal", url),
   onPtyData: (callback: (payload: { sessionId: string; data: string }) => void) => {
     const listener = (_event: unknown, payload: { sessionId: string; data: string }) => callback(payload);
     ipcRenderer.on("pty:data", listener);

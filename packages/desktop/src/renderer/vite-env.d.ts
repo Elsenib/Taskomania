@@ -39,6 +39,7 @@ interface Window {
     ptyWrite(sessionId: string, data: string): void;
     ptyResize(sessionId: string, cols: number, rows: number): void;
     ptyKill(sessionId: string): void;
+    openExternal(url: string): Promise<void>;
     onPtyData(callback: (payload: { sessionId: string; data: string }) => void): () => void;
     onPtyExit(callback: (payload: { sessionId: string }) => void): () => void;
     scanDependencies(rootPath: string): Promise<{

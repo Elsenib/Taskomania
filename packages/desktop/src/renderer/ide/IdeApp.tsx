@@ -8,6 +8,7 @@ import {
   Maximize2,
   Minimize2,
   SquareTerminal,
+  Globe,
 } from "lucide-react";
 import FileTree from "./FileTree";
 import EditorPane from "./EditorPane";
@@ -61,6 +62,15 @@ export default function IdeApp() {
   const [terminalHeight, setTerminalHeight] = useState(240);
   const [terminalShell, setTerminalShell] = useState<"powershell" | "cmd">("powershell");
   const terminalDrag = useRef<{ startY: number; startHeight: number } | null>(null);
+
+  // Set when TerminalPane notices a dev server's own startup URL in its
+  // output (e.g. Vite's "Local: http://localhost:5173/") — surfaced as a
+  // one-click "brauzerdə aç" banner so the user doesn't have to select/copy
+  // it out of the terminal by hand. Cleared whenever the terminal session
+  // itself restarts (new project, or a shell switch), since a stale URL
+  // could point at a server that's no longer running.
+  const [devServerUrl, setDevServerUrl] = useState<string | null>(null);
+  useEffect(() => setDevServerUrl(null), [projectRoot, terminalShell]);
 
   // The dependency graph is cramped inside the narrow sidebar — this lets it
   // take over the whole content area on demand instead of resizing the
@@ -635,6 +645,27 @@ export default function IdeApp() {
                           <option value="cmd">Command Prompt</option>
                         </select>
                       )}
+                      {devServerUrl && (
+                        <button
+                          title={devServerUrl}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 5,
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            background: "#131a24",
+                            color: "#7ee787",
+                            fontSize: 11,
+                            borderRadius: 5,
+                            padding: "2px 8px",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => window.ideAPI!.openExternal(devServerUrl)}
+                        >
+                          <Globe size={12} />
+                          Brauzerdə aç
+                        </button>
+                      )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       <button
@@ -671,7 +702,12 @@ export default function IdeApp() {
                   </div>
                   {!terminalCollapsed && (
                     <div style={{ flex: 1, minHeight: 0 }}>
-                      <TerminalPane key={`${projectRoot}-${terminalShell}`} cwd={projectRoot} shell={terminalShell} />
+                      <TerminalPane
+                        key={`${projectRoot}-${terminalShell}`}
+                        cwd={projectRoot}
+                        shell={terminalShell}
+                        onDevServerUrl={setDevServerUrl}
+                      />
                     </div>
                   )}
                 </div>
