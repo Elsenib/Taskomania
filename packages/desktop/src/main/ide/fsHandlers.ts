@@ -26,6 +26,21 @@ const IMAGE_MIME: Record<string, string> = {
 let watcher: FSWatcher | null = null;
 let watchDebounce: NodeJS.Timeout | null = null;
 
+// node_modules (and .git) are excluded from fs:readDir's own listing, but
+// fs.watch({recursive:true}) has no such filter built in — it watches
+// EVERY file under root, node_modules included. A running dev server
+// (`npm run dev`) writes to node_modules/.vite constantly, which without
+// this check fires the watcher callback continuously and starves the main
+// process — this is what made the whole window feel "frozen" (typing,
+// clicking, everything routes through the same process) until it was
+// minimized/restored. Checked first, before touching the debounce timer
+// at all, so that churn never reaches it.
+function isIgnoredWatchPath(filename: string | null): boolean {
+  if (!filename) return false;
+  const first = filename.split(/[\\/]/)[0];
+  return first === "node_modules" || first === ".git";
+}
+
 // The file tree only re-reads a folder on explicit create/delete/move —
 // with no watcher, anything that changes the project from OUTSIDE those
 // actions (typing `npm create vite@latest .` in the built-in terminal,
@@ -37,7 +52,8 @@ function startWatching(root: string, win: BrowserWindow) {
   watcher?.close();
   watcher = null;
   try {
-    watcher = watch(root, { recursive: true }, () => {
+    watcher = watch(root, { recursive: true }, (_event, filename) => {
+      if (isIgnoredWatchPath(filename)) return;
       if (watchDebounce) clearTimeout(watchDebounce);
       watchDebounce = setTimeout(() => {
         if (!win.isDestroyed()) win.webContents.send("fs:changed");
