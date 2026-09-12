@@ -27,6 +27,15 @@ jobs:
       - run: npm run build:shared
 
       - name: Build Windows installer
+        # CSC_LINK/CSC_KEY_PASSWORD are electron-builder's own env-var
+        # convention (no config.json changes needed) — CSC_LINK is the
+        # base64 of the self-signed "Dastan Studio" .pfx (packages/desktop/
+        # certs/, never committed). Purely cosmetic (avoids an "Unknown
+        # Publisher" UAC prompt on machines that trust that cert) — the
+        # build still succeeds unsigned if these secrets are ever missing.
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         run: npm run package --workspace=@team-tracker/desktop
 
       - uses: actions/upload-artifact@v4
