@@ -16,6 +16,8 @@ uploads/
 # Raw source exports kept on disk for reference — the actually-used copies
 # live under packages/desktop/src/renderer/assets/.
 /taskomania.png
+/TaskomaniaEsas.png
+/TaskomaniaIDE.png
 /Taskomania_startup_animation_video_*.mp4
 
 # electron-builder reads its icon/installer-bitmap inputs from this

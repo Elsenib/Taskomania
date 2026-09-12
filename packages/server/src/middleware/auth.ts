@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 export interface AuthPayload {
   userId: string;
   teamId: string;
-  role: "ADMIN" | "MEMBER";
+  role: "ADMIN" | "MENTOR" | "MEMBER";
 }
 
 declare global {
@@ -43,6 +43,17 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (req.auth?.role !== "ADMIN") {
     return res.status(403).json({ error: "Admin role required" });
+  }
+  next();
+}
+
+// For the one route mentors get beyond a plain member: the team activity
+// audit log. Every other admin-only route keeps using requireAdmin as-is —
+// this is deliberately a separate, narrower middleware rather than changing
+// requireAdmin itself, so nothing else silently opens up to mentors.
+export function requireAdminOrMentor(req: Request, res: Response, next: NextFunction) {
+  if (req.auth?.role !== "ADMIN" && req.auth?.role !== "MENTOR") {
+    return res.status(403).json({ error: "Admin or mentor role required" });
   }
   next();
 }

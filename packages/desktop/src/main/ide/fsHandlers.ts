@@ -1,0 +1,102 @@
+import { ipcMain, dialog, BrowserWindow } from "electron";
+import fs from "fs/promises";
+import path from "path";
+
+// One open project per app instance (matches the plan: a single IDE window
+// is reused/focused rather than multiple projects open at once). Every
+// fs:* handler below resolves its relative path against THIS root and
+// rejects anything that would escape it — the renderer's own code can be
+// trusted to only ever send well-behaved relative paths, but this check
+// means it doesn't have to be: even a compromised renderer can't read/write
+// outside the chosen folder, because the main process is the actual gate.
+let projectRoot: string | null = null;
+
+function resolveInRoot(relPath: string): string {
+  if (!projectRoot) throw new Error("Heç bir layihə qovluğu açıq deyil");
+  const root = path.resolve(projectRoot);
+  const resolved = path.resolve(root, relPath);
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+    throw new Error("Yol layihə kökündən kənara çıxır");
+  }
+  return resolved;
+}
+
+export interface FsEntry {
+  name: string;
+  isDirectory: boolean;
+}
+
+// Read by taskUpload.ts (zipping the currently open project to attach it to
+// a task) — separate from the fs:getProjectRoot IPC handler below, which is
+// for the renderer; this is for other main-process modules.
+export function getCurrentProjectRoot(): string | null {
+  return projectRoot;
+}
+
+export function registerFsHandlers() {
+  ipcMain.handle("dialog:openProjectFolder", async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+    const result = await dialog.showOpenDialog(win!, { properties: ["openDirectory"] });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    projectRoot = result.filePaths[0];
+    return projectRoot;
+  });
+
+  ipcMain.handle("fs:getProjectRoot", async () => projectRoot);
+
+  // Generic folder picker with NO side effect on the active project root —
+  // used to choose WHERE a brand-new project folder should be created,
+  // as opposed to dialog:openProjectFolder which opens an EXISTING one.
+  ipcMain.handle("dialog:pickFolder", async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+    const result = await dialog.showOpenDialog(win!, { properties: ["openDirectory"] });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
+  });
+
+  // Creates a brand-new, empty project folder under a chosen parent
+  // directory and makes it the active root — the "start from scratch"
+  // counterpart to opening an existing folder.
+  ipcMain.handle(
+    "project:createNew",
+    async (_event, { parentPath, name }: { parentPath: string; name: string }): Promise<string> => {
+      const fullPath = path.join(parentPath, name);
+      await fs.mkdir(fullPath, { recursive: false });
+      projectRoot = fullPath;
+      return fullPath;
+    }
+  );
+
+  ipcMain.handle("fs:readDir", async (_event, relPath: string): Promise<FsEntry[]> => {
+    const dirPath = resolveInRoot(relPath);
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    return entries
+      .map((e) => ({ name: e.name, isDirectory: e.isDirectory() }))
+      .filter((e) => e.name !== "node_modules" && e.name !== ".git")
+      .sort((a, b) => Number(b.isDirectory) - Number(a.isDirectory) || a.name.localeCompare(b.name));
+  });
+
+  ipcMain.handle("fs:readFile", async (_event, relPath: string): Promise<string> => {
+    return fs.readFile(resolveInRoot(relPath), "utf-8");
+  });
+
+  ipcMain.handle("fs:writeFile", async (_event, relPath: string, content: string): Promise<void> => {
+    await fs.writeFile(resolveInRoot(relPath), content, "utf-8");
+  });
+
+  ipcMain.handle("fs:createFile", async (_event, relPath: string): Promise<void> => {
+    await fs.writeFile(resolveInRoot(relPath), "", { flag: "wx" });
+  });
+
+  ipcMain.handle("fs:createFolder", async (_event, relPath: string): Promise<void> => {
+    await fs.mkdir(resolveInRoot(relPath));
+  });
+
+  ipcMain.handle("fs:rename", async (_event, fromRel: string, toRel: string): Promise<void> => {
+    await fs.rename(resolveInRoot(fromRel), resolveInRoot(toRel));
+  });
+
+  ipcMain.handle("fs:delete", async (_event, relPath: string): Promise<void> => {
+    await fs.rm(resolveInRoot(relPath), { recursive: true });
+  });
+}

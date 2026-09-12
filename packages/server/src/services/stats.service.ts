@@ -82,10 +82,11 @@ export async function getMemberProfile(teamId: string, userId: string, callingRo
   if (!membership) throw new AuthError("Member not found", 404);
   const user = membership.user;
 
-  // Only the admin can open the admin's own profile — a member has no
-  // business seeing another member's manager-level view, and there's
+  // Only the admin (or a mentor, who's meant to see everything per their
+  // oversight role) can open the admin's own profile — a plain member has
+  // no business seeing another member's manager-level view, and there's
   // nothing task-productivity-related to show there anyway (see below).
-  if (membership.role === "ADMIN" && callingRole !== "ADMIN") {
+  if (membership.role === "ADMIN" && callingRole !== "ADMIN" && callingRole !== "MENTOR") {
     throw new AuthError("Bu profilə baxmaq icazəniz yoxdur", 403);
   }
 
@@ -113,10 +114,12 @@ export async function getMemberProfile(teamId: string, userId: string, callingRo
 
   return {
     user: toPublicUser(user, teamId, membership.role),
-    // null for admins — see the guard above, there's no productivity concept
-    // for a role that doesn't execute tasks.
+    // null for admins/mentors — see the guard above, there's no productivity
+    // concept for a role that doesn't execute tasks (mentors oversee, same
+    // as admins, and are excluded from getTeamStats's leaderboard the same
+    // way via its own `role: "MEMBER"` filter).
     stats:
-      membership.role === "ADMIN"
+      membership.role === "ADMIN" || membership.role === "MENTOR"
         ? null
         : {
             userId,

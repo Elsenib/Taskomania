@@ -34,6 +34,14 @@ export const switchTeamSchema = z.object({
   teamId: z.string().uuid(),
 });
 
+// Admin promoting/demoting a member — deliberately excludes "ADMIN" here:
+// this endpoint only ever moves someone between MEMBER and MENTOR, never
+// grants admin (that has no UI/flow yet, unlike leaveTeam's "no promote to
+// admin" gap this doesn't attempt to fill).
+export const setMemberRoleSchema = z.object({
+  role: z.enum(["MENTOR", "MEMBER"]),
+});
+
 export const createTaskSchema = z.object({
   columnId: z.string().uuid(),
   title: z.string().min(1).max(300),

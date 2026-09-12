@@ -13,7 +13,7 @@ import { useUiStore } from "../store/uiStore";
 // id already present is left alone) to avoid double-adding on your own echo.
 export function useRealtimeSync(teamId: string) {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, logout, switchTeam } = useAuth();
   const openTask = useUiStore((s) => s.openTask);
 
   useEffect(() => {
@@ -74,6 +74,17 @@ export function useRealtimeSync(teamId: string) {
         if (!old) return old;
         return { members: old.members.map((m) => (m.id === member.id ? member : m)) };
       });
+
+      // The JWT itself still carries whatever role was true when it was
+      // issued — a role change (mentor promotion/demotion) only actually
+      // takes effect for the AFFECTED user once they get a new token.
+      // switchTeam(teamId) mints one from the current DB role even when
+      // "switching" to the team you're already in, so reuse it here as a
+      // silent self-refresh rather than requiring a re-login for the new
+      // permissions (e.g. seeing the activity log) to actually apply.
+      if (member.id === user.id && member.role !== user.role) {
+        switchTeam(teamId).catch(() => {});
+      }
     };
 
     const onTaskCreated = (task: Task) => {
@@ -185,6 +196,19 @@ export function useRealtimeSync(teamId: string) {
       invalidateGraph();
     };
 
+    // Unlike leaving a team (silent — the leaver's own client already knows,
+    // everyone else finds out on next refetch), a whole-team delete has to
+    // be pushed to every other connected client immediately: their board
+    // just stopped existing out from under them. Simplest safe reaction —
+    // rather than trying to silently re-target one of the user's other
+    // teams — is a full logout back to the login screen, same as an
+    // expired-session kick.
+    const onTeamDeleted = ({ teamId: deletedTeamId }: { teamId: string }) => {
+      if (deletedTeamId !== teamId) return;
+      notify("Komanda silindi", "Bu komanda admin tərəfindən silindi.", () => {});
+      logout();
+    };
+
     socket.on("column:created", onColumnCreated);
     socket.on("column:reordered", onColumnReordered);
     socket.on("column:renamed", onColumnRenamed);
@@ -200,6 +224,7 @@ export function useRealtimeSync(teamId: string) {
     socket.on("attachment:deleted", onAttachmentDeleted);
     socket.on("dependency:created", onDependencyCreated);
     socket.on("dependency:deleted", onDependencyDeleted);
+    socket.on("team:deleted", onTeamDeleted);
 
     return () => {
       socket.off("column:created", onColumnCreated);
@@ -217,6 +242,7 @@ export function useRealtimeSync(teamId: string) {
       socket.off("attachment:deleted", onAttachmentDeleted);
       socket.off("dependency:created", onDependencyCreated);
       socket.off("dependency:deleted", onDependencyDeleted);
+      socket.off("team:deleted", onTeamDeleted);
     };
-  }, [teamId, queryClient, user, openTask]);
+  }, [teamId, queryClient, user, openTask, logout, switchTeam]);
 }

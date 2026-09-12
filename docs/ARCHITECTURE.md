@@ -399,3 +399,318 @@ dəsti" yanaşması əvəzinə, yüngül bir etiket + filter əlavə edildi.
 
 - **dnd-kit: sürüklənən kart sütunun `overflow`-unda kəsilir.** `useDraggable`-ın `transform`-unu birbaşa kartın özünə tətbiq etsən, kart öz valideyninin (sütunun scroll olan daxili div-i) daxilində qalır — sütun sərhədini keçəndə vizual olaraq kəsilir və digər sütunların üzərinə çıxa bilmir. Həll: `@dnd-kit/core`-un `DragOverlay`-i — sürüklənən zaman əsl kart `visibility: hidden` olur (yerini saxlayır), `DragOverlay` isə ayrıca, heç bir `overflow`/stacking context-ə bağlı olmayan bir qatda üzən klonu göstərir (`Board.tsx`-də `activeId` state-i + `TaskCard.tsx`-də ixrac olunan `TaskCardOverlay`).
 - **dnd-kit: kart klikləmə vs sürükləmə.** `useDraggable` default `PointerSensor`-u heç bir `activationConstraint` olmadan istifadə etsə, drag `pointerdown`-da (məsafə 0) dərhal başlayır və bu, kartın `onClick`-ini (edit modalını açan) udur. Həll: `Board.tsx`-də `useSensor(PointerSensor, { activationConstraint: { distance: 8 } })` — yəni sürükləmə yalnız 8px-dən çox hərəkətdən sonra aktivləşir, adi klik isə normal keçir.
+
+## Brendinq: "Dastan Studio" + tətbiq ikonu yenilənməsi
+
+- **Nəşriyyat adı**: kod-imzalama sertifikatının subyekti (`CN=Dastan Studio`) və `package.json`-da
+  `"author": "Dastan Studio"` (əvvəllər "Taskomania" idi — məhsul adı ilə nəşriyyat adı ayrıldı).
+  Sertifikat + `.pfx`/parol `packages/desktop/certs/`-də (gitignore-da, HEÇ VAXT commit olunmur).
+  Başqa kompüterdə etibar qazanmaq üçün `certs/share-with-friend/` (yalnız `.cer`+`.bat`+`.ps1`,
+  parolsuz) — `.bat` özünü UAC ilə yüksəldib sertifikatı `LocalMachine` mağazasına quraşdırır.
+- **Tətbiq/bildiriş ikonu**: `build/icon.ico`/`icon.png` və `renderer/assets/notification-icon.png`
+  istifadəçinin verdiyi yeni `TaskomaniaEsas.png`-dən yenidən yaradıldı (əvvəlki avtomatik-kəsilmiş
+  versiya əvəzinə).
+
+## Layihə etiketi ikonları
+
+`board/projectTag.ts`-də hər layihəyə (rəngdən əlavə) fərqli bir `lucide-react` ikonu təyin olunur —
+16 ikonluq sabit siyahıdan (`PROJECT_ICONS`) seçim layihənin sırasına (indeksinə) görə deyil, öz
+`id`-sinin djb2 hash-inə görədir (`hashString()`) — əvvəlki indeks-əsaslı versiya yeni layihələr
+yaradıldıqca ikonların "növbə ilə", proqnozlaşdırıla bilən ardıcıllıqla təkrarlandığını göstərmişdi.
+`TaskCard.tsx`-də rəngli nöqtə əvəzinə bu ikon göstərilir.
+
+## Daxili IDE
+
+İstifadəçinin Taskomania daxilində real kod yazıb test edə bilməsi üçün (C#/Python/Java/
+React/React Native/TypeScript/Node.js/Next.js/SQL) ayrıca bir "Faza 1" IDE quruldu — fayl ağacı,
+Monaco redaktoru, əsl terminal, fayl-asılılıq qrafiki, sonra əsl dil-server (LSP) inteqrasiyası.
+
+### Təhlükəsizlik memarlığı — ayrıca pəncərə, ayrıca preload
+
+IDE Board-un pəncərəsi ilə **eyni deyil** — tamamilə ayrıca bir `BrowserWindow` (`src/main/ide/ideWindow.ts`),
+öz `session` partition-u (`persist:ide`, Board-un JWT-sini paylaşmır) və öz preload skripti
+(`idePreload.ts`, `window.ideAPI`) ilə açılır. Bunun səbəbi: Board-un renderer-i (tapşırıq
+təsviri/şərh kimi istifadəçi məzmunu göstərir) heç vaxt fs/pty/lsp körpüsünə malik olan
+`contextBridge` obyektinə çıxışı olmur — struktur səviyyəsində, Board-da fərz edilən XSS terminala/
+diskə çata bilməz, kodun diqqətlə yazılmasından asılı olmadan. Header-də yeni bir ikon-düymə
+(`TaskomaniaIDE.png`) `window.teamTracker.openIde()` → `ipcMain.on("ide:open", ...)` ilə bu pəncərəni
+açır/önə gətirir.
+
+### Fayl sistemi
+
+`src/main/ide/fsHandlers.ts` — istifadəçi `dialog.showOpenDialog` ilə bir "layihə kökü" seçir
+(və ya "Yeni layihə yarat" formu ilə boş qovluq yaradır, `project:createNew`), bundan sonra bütün
+`fs:*` kanalları YALNIZ nisbi yol qəbul edir; `resolveInRoot()` hər çağırışda `path.resolve(root,
+relPath)`-in kökün daxilində qaldığını yoxlayır (`../../` kimi cəhdləri rədd edir) — bu, renderer-in
+iddiasına deyil, əsas prosesin öz yoxlamasına əsaslanan sərhəddir. `FileTree.tsx` qovluqları lazımı
+anda (`readDir` ilk genişlənmədə) yükləyir; kök səviyyəsində "+ Fayl"/"+ Qovluq" düymələri var
+(`window.prompt()` DEYİL — Electron-un Chromium-u native bloklayıcı `prompt()`-u tətbiq etmir,
+"is and will not be supported" xətası atır — əvəzinə inline `<input>` state-i istifadə olunur).
+
+### Terminal — qısıtlı, yalnız yerli klaviatura
+
+`src/main/ide/ptyHandlers.ts` — `node-pty` ilə əsl `powershell.exe`/`bash` prosesi (cwd = layihə
+kökü). Tək invariant: `pty:write` YALNIZ `TerminalPane.tsx`-in öz `xterm.onData()` callback-indən
+çağırılır — heç bir tapşırıq datası/şəbəkə hadisəsi/başqa IPC kanalı bu kanala yaza bilməz. IDE
+pəncərəsi bağlananda (`ideWindow.ts`-in `"closed"` handler-i) `killAllPtySessions()` çağırılır —
+React-ın unmount-cleanup-u pəncərənin JS kontekstinin dərhal məhv edilməsi səbəbindən vaxtında işə
+düşməyə bilər, bunsuz hər bağlanan pəncərə bir "yetim" powershell/bash prosesi qoyub gedərdi (cwd
+kilidli qalır, qovluğu silmək mümkün olmur).
+
+### Fayl-asılılıq qrafiki
+
+`src/main/ide/dependencyScanner.ts` (`project:scanDependencies`) — layihəni gəzib mətn fayllarında
+sadə regex-lə import/require ifadələrini çıxarır (JS/TS/JSX/TSX/Python/C#/Java), nisbi importları
+əsl fayl yoluna çevirir. Render: mövcud `react-force-graph-2d` konvensiyası (`graph/GraphView.tsx`-
+dəki eyni kitabxana) təkrar istifadə olunur — yeni asılılıq lazım deyil. `DependencyGraphPane.tsx`
+sol paneldə "Qraf" tab-ı kimi, node-a klik faylı redaktorda açır.
+
+### LSP — real IntelliSense (avtomatik tamamlama, xəta vurğulama)
+
+`monaco-languageclient` (v10+) `@codingame/monaco-vscode-api` tam VSCode-təqlid polifil ekosistemini
+tələb etdiyi üçün (sadə `@monaco-editor/react` quruluşu ilə uyğun deyil) İSTİFADƏ OLUNMADI —
+əvəzinə yüngül, əldə yazılmış bir körpü quruldu:
+
+- **`src/main/ide/lspHandlers.ts`** — dil serverlərini (`typescript-language-server`, `pyright`,
+  `sql-language-server`) yerli uşaq proses kimi işə salır. Hamısı Node-based CLI-lardır, ona görə
+  ayrıca Node.js quraşdırılması TƏLƏB OLUNMUR — `process.execPath` (Electron-un öz exe-si) +
+  `ELECTRON_RUN_AS_NODE: "1"` mühit dəyişəni ilə çağırılır (`node-pty`-nin öz uşaq prosesindən
+  fərqli olaraq, bu, adi bir `child_process.spawn`-dır). LSP-nin `Content-Length: N\r\n\r\n<JSON>`
+  freym protokolunu əl ilə parçalayan kiçik bir bufer (`drainMessages`) var (bir `stdout` "data"
+  hadisəsi bir neçə mesaj ehtiva edə bilər, ya da bir mesaj bir neçə hadisəyə bölünə bilər).
+- **`renderer/ide/lsp/LspClient.ts`** — minimal JSON-RPC 2.0 client (sorğu id-ləri + pending
+  promise map-i + bildiriş handler-ləri) — `vscode-jsonrpc` əvəzinə əl ilə yazılıb, çünki
+  ehtiyac sadəcə `sendRequest`/`sendNotification`/`onNotification`-dır.
+- **`renderer/ide/lsp/lspManager.ts`** — Monaco-nun öz provider API-lərinə (`registerCompletionItem
+  Provider`, `registerHoverProvider`, `registerDefinitionProvider`) birbaşa bağlanır, ayrıca
+  `MonacoLanguageClient` sinifi lazım deyil. Hər açılan fayl üçün server sessiyası (layihə+dil üzrə,
+  paylaşılan) başladılır/tapılır, `textDocument/didOpen`/`didChange`/`didClose` göndərilir,
+  `textDocument/publishDiagnostics` bildirişləri `monaco.editor.setModelMarkers`-ə çevrilir.
+- **Monaco-nun öz built-in TS/JS worker-i söndürüldü** (`monacoSetup.ts`,
+  `typescriptDefaults.setModeConfiguration({completionItems:false, hovers:false, diagnostics:false, ...})`)
+  — əks halda bizim əsl LSP-based provider-lərimizlə eyni vaxtda işləyib təkrarlanan (iki dəfə
+  görünən) tamamlama siyahısı/diaqnostika yaradırdı.
+- **Gotcha — URI normalizasiyası (real, canlı sınaqda tapılan bug).** `publishDiagnostics`
+  bildirişi düzgün gəlirdi, amma heç bir qırmızı xətt görünmürdü: səbəb, bizim özümüzün qurduğumuz
+  `file://` URI-si (`file:///C:/Users/...`, böyük hərfli sürücü, kodlanmamış `:`) server-in öz
+  daxili `vscode-uri` kitabxanası ilə normalizə edib geri göndərdiyi URI-dən (`file:///c%3A/Users/...`,
+  kiçik hərfli sürücü, `%3A`-kodlanmış `:`) fərqli idi — sətir müqayisəsi həmişə uğursuz olurdu,
+  diaqnostika səssizcə heç bir modelə tətbiq olunmurdu. Həll: `toFileUri()` Windows sürücü
+  yollarında eyni normalizasiyanı təkrarlayır (sürücü hərfini kiçildir, `:`-ni `%3A`-yə çevirir,
+  qalan hissəni `encodeURI` edir). Canlı UI-da (real `typescript-language-server` prosesi, real
+  tamamlama popup-u "age (property) Person.age: number" detalı ilə, real qırmızı vurğu "Type
+  'number' is not assignable to type 'string'" mesajı ilə) təsdiqləndi.
+### C#/Java — "ilk istifadədə endir" modeli
+
+TypeScript/Python/SQL server-lərindən fərqli olaraq, OmniSharp (~50MB) və Eclipse JDT LS (~50MB)
+`package.json`-da bundled asılılıq DEYİL — installer-i şişirtməmək üçün yalnız istifadəçi əsl
+`.cs`/`.java` faylı açanda, bir dəfəlik endirilib keşlənir.
+
+- **`src/main/ide/lspDownloader.ts`** — `app.getPath("userData")/lsp-servers/<csharp|java>/` altına
+  endirir; tamamlandıqdan sonra bir `.installed` marker faylı yazır (yarımçıq qalan endirmə uğurlu
+  quraşdırma kimi qəbul edilməsin deyə). Arxiv açma əlavə npm asılılığı YOXDUR — Windows-da
+  PowerShell-in `Expand-Archive`-ı (.zip) və hər iki platformada `tar` (.tar.gz — Windows 10 1803+
+  öz `tar.exe`-sini (bsdtar) System32-də daşıyır) proses kimi çağırılır.
+  - **C#**: OmniSharp-ın öz-özünə-yetərli (`net6.0`, versiya sabitlənib: `v1.39.15`) buraxılışı —
+    .NET SDK-nın ayrıca quraşdırılmasını tələb etmir. `OmniSharp.exe -lsp` (`-lsp` bayrağı onu
+    default-un öz köhnə, LSP-dən əvvəlki xətt-əsaslı stdio protokolundan əsl LSP rejiminə keçirir).
+  - **Java**: Eclipse-in öz "həmişə cari" snapshot URL-i (`jdt-language-server-latest.tar.gz`) —
+    versiya nömrəsi yoxdur, redaktör plaginlərinin (Emacs lsp-mode və s.) istifadə etdiyi eyni
+    stabil ünvan. İşə salma: `java -jar <equinox-launcher>.jar -configuration config_win/mac/linux
+    -data <layihəyə-görə-hash-lənmiş workspace qovluğu>` — JDT LS hər layihə üçün AYRICA, sabit bir
+    `-data` qovluğu tələb edir (paylaşılsa öz indeksini korlayır), ona görə layihə yolunun md5
+    hash-i workspace qovluq adı kimi istifadə olunur. **Qeyd**: bu yol sistemdə артıq quraşdırılmış
+    bir JRE/JDK tələb edir (JDT LS-in özünü işə salmaq üçün) — bunun ayrıca endirilməsi (bundled
+    JRE) bu turda edilmədi, şüurlu əhatə-sərhədi (VS Code-un öz Java uzantısının da defolt
+    davranışı ilə eynidir).
+- **Renderer axını**: `EditorPane.tsx` faylı açanda `attachLanguageServer()` əvvəlcə
+  `ideAPI.lspIsServerInstalled()` yoxlayır; yoxdursa redaktorun üstündə kiçik bir zolaq görünür
+  ("C# dəstəyi ... endirilsin? ~50 MB, bir dəfəlik" + Endir/İmtina), təsdiqdən sonra faiz
+  göstərən canlı progress-bar (`lsp:downloadProgress` IPC hadisəsi), tamamlandıqdan sonra avtomatik
+  qoşulma cəhdi. Server prosesi uğursuz olsa (məs. Java tapılmadı) ayrıca "Dil serveri qoşula
+  bilmədi: ..." xəta zolağı göstərilir — redaktorun özü işləməyə davam edir, sadəcə IntelliSense
+  olmadan.
+- **Gotcha — server-lər arasında `file://` URI normalizasiyası fərqlidir.** `typescript-language-
+  server` (`vscode-uri` kitabxanası vasitəsilə) sürücü hərfinin ardından gələn iki nöqtəni
+  faiz-kodlayır (`file:///c%3A/...`), OmniSharp isə sürücü hərfini kiçildir amma iki nöqtəni
+  DƏYİŞMİR (`file:///c:/...`) — eyni faylın iki fərqli, tam etibarlı URI təsviri. Xam sətir
+  müqayisəsi (`entry.uri !== params.uri`) buna görə server-dən asılı olaraq səssizcə uğursuz olub
+  diaqnostikanın heç vaxt tətbiq olunmamasına səbəb olurdu (bildiriş özü düzgün gəlirdi — yalnız
+  uyğunlaşdırma pozulurdu). Həll: `normalizeUriForCompare()` (`lspManager.ts`) — müqayisədən əvvəl
+  hər iki tərəf `decodeURIComponent` + kiçik hərflə normallaşdırılır, konvensiyadan asılı olmadan
+  eyni fayla işarə edən istənilən iki URI-ni bərabərləşdirir. Canlı sınaqla tapılıb (tamamlama
+  işləyirdi, diaqnostika işləmirdi — iki fərqli kod yolu olduğu üçün bir problemin digərini
+  maskaladığı görünmürdü).
+- Canlı UI-da tam test edilib: OmniSharp-ın həqiqi endirmə+quraşdırma axını (52MB, faiz progress-
+  bar), real `.csproj`-lu layihədə real `System.Console` üzv siyahısı ilə tamamlama (`Beep`,
+  `BufferHeight`, `Clear` və s. — söz-əsaslı ehtiyat siyahısı deyil), real tip xətası squiggle-i
+  (`"Cannot implicitly convert type 'string' to 'int'"` tərzi), Java üçün server-in `java` olmadan
+  aydın xəta ilə uğursuz olduğu (gözlənilən sərhəd davranışı) təsdiqləndi.
+
+## Tapşırıq ↔ IDE bağlantısı
+
+Admin tapşırıq verir, üzv "Götür"lə üzərinə götürüb "In Progress"ə keçirir — bu andan etibarən
+tapşırıq detalında yeni bir seçim görünür: "Bu tapşırıq üzərində necə işləyəcəksən? Daxili IDE /
+Xarici alət". Məqsəd: üzv daxili IDE-ni seçib layihə üzərində işləsin, sonra "Layihəni tapşırığa
+saxla" ilə həmin layihəni birbaşa tapşırığa bağlasın ki, admin sonradan asanlıqla baxa bilsin.
+
+- **Görünmə şərti** (`TaskDetailModal.tsx`): yalnız `task.assigneeId === user.id` VƏ tapşırığın
+  sütunu `type === "IN_PROGRESS"` olanda (`showWorkChoice`) — həm admin hər tapşırığa baxanda
+  görünməsin, həm də iş başlamazdan əvvəl mənasız olmasın deyə.
+- **Token ötürülməsi (təhlükəsizlik sərhədi qorunur)**: "Daxili IDE" düyməsi `window.teamTracker.
+  openIdeForTask(taskId, token, apiUrl)` çağırır — JWT Board-un öz preload-undan (`getToken()`,
+  artıq mövcud) ötürülür, `ipcMain.on("ide:open", ...)` vasitəsilə **əsas prosesə** çatır və
+  `taskContext.ts`-də modul-səviyyəli state kimi saxlanılır. IDE pəncərəsinin öz renderer-i bu
+  token-i HEÇ VAXT görmür — yalnız `taskId`-ni (`ideAPI.getTaskContext()`) bilir. Bu, IDE-nin
+  Board-dan ayrı session partition-a malik olmasının (bax yuxarı, "Təhlükəsizlik memarlığı")
+  DİREKT davamıdır: token yalnız əsas prosesdə yaşayır, heç bir renderer-in JS heap-ində deyil.
+- **Saxlama axını** (`taskContext.ts` + `taskUpload.ts`): "Layihəni tapşırığa saxla" düyməsi
+  `task:saveProject` invoke edir → əsas proses layihəni (node_modules/.git/bin/obj/dist və s.
+  istisna olmaqla, filtrlənmiş bir staging qovluğuna köçürüb) ZIP-ləyir (Windows-da PowerShell-in
+  `Compress-Archive`-ı, native alət, əlavə npm asılılığı yoxdur — `tar -a` yoxlanıldı, düzgün zip
+  yaratmadığı üçün rədd edildi) və mövcud tapşırıq-əlavəsi endpoint-inə (`POST /tasks/:id/
+  attachments`, `kind=ARCHIVE`) yükləyir — bu, Board-un öz `AttachmentPanel.tsx`-inin artıq
+  istifadə etdiyi EYNİ endpoint-dir, yeni backend/sxem lazım olmadı.
+- Canlı UI-da tam test edilib: tapşırıq yaradılıb → Götür → In Progress-ə sürüklənib → "Daxili
+  IDE" seçilib (yeni IDE pəncərəsi `taskId` ilə açılıb) → layihə seçilib → "Layihəni tapşırığa
+  saxla" basılıb → server-in `uploads/<attachmentId>/` qovluğunda ZIP-in düzgün açıldığı təsdiqlənib
+  → Board-un tapşırıq modalında "Fayllar" bölməsində `project.zip` görünüb (admin-in artıq bildiyi
+  önizləmə axını ilə).
+
+## Kod-mənşəyi (paste vs yazma) izləməsi
+
+İstifadəçinin "kodun neçə faizi AI, neçəsi əl ilə yazılıb" sualına texniki cəhətdən dürüst cavab:
+heç bir alət bunu etibarlı deyə bilməz (nə insan, nə AI-stilin unikal "imzası" var). Bunun əvəzinə
+**obyektiv, yoxlanıla bilən** bir şey ölçülür: mətn redaktora NECƏ daxil olub — kiçik, ardıcıl
+klaviatura vuruşları ilə, yoxsa bir anda böyük bir blok (paste) kimi.
+
+- **`renderer/ide/codeOriginTracker.ts`** — modul-səviyyəli iki sayğac (`typedChars`/`pastedChars`).
+  Hər açıq faylın `model.onDidChangeContent`-i (`EditorPane.tsx`-də, LSP-nin öz sinxronizasiya
+  listener-indən AYRICA bir listener) hər dəyişikliyi ötürür: 20 simvoldan böyük tək-dəfəlik
+  daxiletmə "paste", daha kiçik "yazma" sayılır (undo/redo `e.isUndoing`/`e.isRedoing` ilə tamamilə
+  istisna edilir — köhnə mətni bərpa etmək yeni müəlliflik deyil). Fayl AÇILANDA ilkin məzmunun
+  özü sayılmır, çünki bu listener yalnız `onMount`-dan SONRA qoşulur (ilkin `value` modelə ondan
+  əvvəl `@monaco-editor/react` tərəfindən yazılıb).
+- **Göstərilmə yeri**: yeni UI YOXDUR — "Layihəni tapşırığa saxla" işə düşəndə fayl yükləməsi
+  uğurlu olandan sonra `postCodeOriginComment()` (`taskUpload.ts`) statistikanı adi bir TAPŞIRIQ
+  ŞƏRHİ kimi göndərir (mövcud `POST /tasks/:id/comments`) — admin-in artıq açdığı Şərhlər bölməsində
+  görünür, ayrıca panel/sxem lazım olmadı. Mətn həmişə "əl ilə yazılıb ~X%, yapışdırılıb ~Y%"
+  formatındadır, heç vaxt "AI" sözü keçmir.
+
+## Emmet (`!` + Tab → HTML skeleti)
+
+`emmet-monaco-es` (kiçik, monaco-editor-a uyğun paket) — `monacoSetup.ts`-də bir dəfə,
+modul yüklənəndə qeydiyyatdan keçir: `emmetHTML` (html), `emmetCSS` (css/scss/less), `emmetJSX`
+(javascript/typescript). VS Code-un öz Emmet davranışı ilə eynidir (`!`+Tab → tam HTML5 skeleti,
+tab-stop-larla). Canlı UI-da test edilib: boş `.html` faylda `!`+Tab tam boilerplate yaradıb,
+kursor `<body>` daxilində, ilk tab-stop (`device-width`) seçili qalıb.
+
+## "Go Live" (HTML canlı önizləmə)
+
+VS Code-un Live Server uzantısının kiçik bir analoqu — `src/main/ide/goLiveServer.ts`.
+
+- Yalnız `127.0.0.1`-ə bağlanır (heç vaxt `0.0.0.0`) — layihə qovluğundan ixtiyari fayl
+  göstərdiyi üçün şəbəkədən əlçatan olmamalıdır. Statik fayl serving path-containment yoxlaması
+  ilə (`fsHandlers.ts`-in `resolveInRoot`-u ilə eyni naxış).
+  Canlı-yenilənmə **`ws` npm asılılığı olmadan**, sadə Server-Sent Events (`EventSource`,
+  brauzerin öz built-in API-si) ilə: hər `.html` cavabına `</body>`-dan əvvəl kiçik bir
+  `<script>` yeridilir, bu, `/__taskomania_live_reload` SSE axınına qoşulur; `fs.watch(root,
+  {recursive:true})` (200ms debounce-lu) faylda dəyişiklik aşkarlayanda bütün qoşulmuş
+  brauzerlərə `data: reload` göndərilir.
+- Port `server.listen(0, "127.0.0.1")` ilə avtomatik seçilir (toqquşma riski yoxdur),
+  `shell.openExternal(url)` ilə istifadəçinin öz default brauzerində açılır (ayrıca preview
+  paneli YOXDUR — real brauzer, real DevTools).
+- "Go Live" düyməsi yalnız açıq fayl `.html`/`.htm` olanda görünür (server işləyərkən başqa fayla
+  keçsə də düymə "dayandır" halında qalır ki, söndürmək mümkün olsun). IDE pəncərəsi bağlananda
+  `killGoLiveServer()` (digər bütün pty/lsp təmizləmələri ilə eyni yerdə, `ideWindow.ts`-in
+  `"closed"` handler-i) server+watcher-i söndürür.
+- Canlı UI-da tam test edilib: Emmet ilə yaradılan boş HTML faylı üçün "Go Live" basılıb, səhifə
+  həqiqi Edge pəncərəsində açılıb; sonra body-yə mətn əlavə edilib saxlanılıb, brauzer HEÇ BİR
+  əl ilə yeniləmə olmadan avtomatik yenilənib yeni mətni göstərib; "dayandır" düyməsi server-i
+  düzgün söndürüb.
+
+## Fayl/qovluq ikonları (VS Code tərzi)
+
+`renderer/ide/fileIcons.ts` — `lucide-react` ikonları (artıq layihə asılılığı, layihə etiketləri
+üçün də istifadə olunur) uzantıya görə SABİT (hash-lənməmiş) rənglərlə: `.ts`/`.tsx` mavi, `.js`
+sarı, `.py` mavi, `.cs` bənövşəyi, `.java` narıncı (Coffee ikonu) və s. — VS Code/Material ikon
+temalarının tanınan rəng konvensiyalarını təqlid edir, Microsoft-un öz ikon fondunu kopyalamadan.
+`package.json` kimi tam fayl adları uzantıdan ƏVVƏL yoxlanılır (`NAME_ICON`) ki, xüsusi hallar
+(Package ikonu, qırmızı) uzantı-əsaslı defolt-u əzsin. Qovluqlar açıq/bağlı vəziyyətə görə
+`FolderOpen`/`Folder` göstərir. `FileTree.tsx`-də canlı təsdiqlənib (fayl ağacında rəngli,
+fərqləndirilən ikonlar).
+
+## Komandanı həmişəlik silmə
+
+Mövcud "komandanı tərk et" (yalnız özünü çıxarır) ilə YANAŞI, admin bütün komandanı həmişəlik silə
+bilər — sxemdə yalnız `TeamMembership` və `Project` `Team`-dən avtomatik cascade edir, `Invite`/
+`Task`/`Column` etmir, ona görə `auth.service.ts`-də yeni `deleteTeam()` bunları BİR tranzaksiyada,
+asılılıq sırası ilə (əvvəlcə `Invite`, sonra `Task` — bu öz növbəsində `Comment`/`Attachment`/
+`TaskActivity`/`TaskDependency`-ni öz cascade-i ilə aparır — sonra `Column`, sonda `Team`) silir.
+
+- **Rol JWT-dən deyil, DB-dən yoxlanılır** — `leaveTeam`-dən fərqli olaraq, bu qədər dağıdıcı bir
+  əməliyyat üçün çağıranın JWT-dəki (hazırkı aktiv komandaya aid) rolu deyil, HƏDƏF komandadakı
+  canlı `TeamMembership` sətri yoxlanılır (admin bir neçə komandada fərqli rollara malik ola bilər).
+- **"Yeganə komanda" qadağası** `leaveTeam`-lə eynidir (istifadəçinin başqa heç bir komandası
+  qalmaması qarşısı alınır — tətbiq "komandasız sessiya" vəziyyətini dəstəkləmir), AMMA "yeganə
+  admin" qadağası YOXDUR (silərkən özünü də silmiş olursan, bu, tərk etməkdən fərqli bir niyyətdir).
+- **Digər üzvlərə canlı bildiriş** — tərk etmə səssizdir (yalnız növbəti sorğuda görünər), AMMA
+  silmə HAMI üçün dərhal olmalıdır (onların lövhəsi artıq mövcud deyil). Yeni `team:deleted` socket
+  hadisəsi (`team:${teamId}` otağına) — `useRealtimeSync.ts` bunu eşidib, silinən komanda hazırkı
+  aktiv komanda olarsa, sadəcə tam çıxış edir (`logout()`) — başqa komandaya səssiz keçid etməyə
+  çalışmaqdansa ən sadə, həmişə təhlükəsiz reaksiya.
+- **UI** (`TeamSwitcher.tsx`): admin-only "Komandanı həmişəlik sil" düyməsi → GitHub-tərzi
+  təsdiqləmə (komandanın adını əl ilə yazmadan "Həmişəlik sil" düyməsi aktivləşmir) — sadə
+  `window.confirm` kifayət etməyəcək qədər dağıdıcı bir əməliyyat üçün.
+- Canlı UI-da tam test edilib: bir dəfəlik test komandası yaradılıb, silinib, `TeamSwitcher`
+  siyahısından tam yox olduğu təsdiqlənib, avtomatik ən son aktiv komandaya keçid baş verib.
+
+## Profil şəklinə klik → böyük baxış
+
+`ProfileScreen.tsx`-də mövcud `Avatar` komponenti bir `<button>` ilə sarılıb (yalnız `avatarUrl`
+mövcud olanda kliklənə bilən, başlıqsız fayl-seçici ilə qarışmasın deyə `AvatarPicker.tsx`-dən
+ayrıca) — klikdə yeni, kiçik `AvatarLightbox.tsx` açılır. `AttachmentPreviewModal`-ı təkrar istifadə
+ETMİR (o, fayl/arxiv-spesifik, ağac görünüşü + məzmun-növü aşkarlama daşıyır) — sadəcə "bir şəkil,
+daha böyük" olduğu üçün eyni overlay/panel/Escape/klik-kənara konvensiyasını təkrarlayan öz kiçik
+komponenti var. Canlı UI-da test edilib: profil şəkli təyin edilib, ProfileScreen-də ona klik
+edilib, böyüdülmüş versiya (tam ikon detalları görünən) açılıb, Escape ilə bağlanıb.
+
+## Mentor rolu
+
+`ADMIN`/`MEMBER`-ə əlavə üçüncü rol: admin bir üzvü ProfileScreen-dən (`setMemberRole` düyməsi ilə)
+`MENTOR`-a təyin edə bilər — moderator kimi, komandanı izləyən amma admin səlahiyyətinə malik
+olmayan biri. Prisma enumuna yeni dəyər əlavəsi qeyri-dağıdıcı olduğu üçün (`ALTER TYPE "Role" ADD
+VALUE`) sadə `prisma migrate dev` kifayət etdi — əvvəlki `User.teamId/role` sxem dəyişikliyindən
+fərqli olaraq əl ilə SQL yazmağa ehtiyac olmadı.
+
+- **İcazə səthi qəsdən minimal saxlanıb** — mentor HƏR ŞEYDƏ `MEMBER` kimi davranır, İSTİSNA olaraq
+  YALNIZ iki yerdə fərqlənir: (1) komanda fəaliyyət/audit jurnalını görə bilir, (2) bütün profilləri
+  (adminin özü daxil) görə bilir. Komandanı silmə/tərk etmə, tapşırıq silmə, başqasını mentor/admin
+  təyin etmə — hamısı `ADMIN`-only qalır.
+- **Kod dəyişikliyinin əksəriyyəti "pulsuz" gəldi** — `task.service.ts`-dəki icazə yoxlamaları
+  (`assertMoveAllowed`, `assertAssigneeChangeAllowed`, tapşırıq silmə marşrutu, `deleteTeam`-in öz
+  yoxlaması) hamısı binar formada yazılıb (`callingRole === "ADMIN"` / `!== "ADMIN"`), `"MEMBER"`-i
+  açıq sadalamır — deməli `MENTOR` avtomatik olaraq `MEMBER` ilə eyni qısıtlı budağa düşür, bu
+  fayllarda HEÇ BİR dəyişiklik lazım olmadı. Eynilə `getTeamStats`-in üzv reytinq sorğusu açıq
+  `role: "MEMBER"` siyahısı istifadə edir (`role: { not: "ADMIN" }` yox) — mentor avtomatik
+  statistika reytinqindən kənarda qalır.
+- **İki-səviyyəli admin-qapı naxışı** — mövcud `requireAdmin` (8 marşrutda, TOXUNULMAYIB) YANAŞI
+  yeni `requireAdminOrMentor` middleware-i əlavə olundu, YALNIZ komanda fəaliyyət jurnalı
+  marşrutunda istifadə olunur — bu, qəsdən AYRICA saxlanıldı ki, başqa heç bir admin-only marşrut
+  təsadüfən mentora açılmasın.
+- **JWT köhnəlmə problemi və həlli** — `TeamMembership.role` DB-də əsl mənbədir, amma istifadəçinin
+  JWT-si (`AuthPayload.role`) yalnız token verildiyi andakı rolu daşıyır. Admin bir üzvü mentora
+  təyin edəndə, həmin istifadəçinin ARTIQ AKTİV sessiyası bunu dərhal görmür (yeni giriş/komanda
+  keçidinə qədər). Bu, real backend sorğuları ilə təsdiqləndi: köhnə (təyinatdan əvvəlki) token
+  fəaliyyət jurnalına `403 "Admin or mentor role required"` alır. Həll: `useRealtimeSync.ts`-in
+  `onMemberUpdated` handler-i `member.id === user.id && member.role !== user.role` aşkarlayanda
+  mövcud `switchTeam(teamId)`-i (EYNİ komandaya) səssizcə çağırır — bu, DB-dəki canlı roldan yeni
+  token basır, yeni token-refresh infrastrukturu qurmaq əvəzinə mövcud mexanizmi təkrar istifadə
+  edir. Backend testi bunu təsdiqlədi: `switchTeam` çağırışından sonra tələb olunan token dərhal
+  `MENTOR` rolu ilə qayıdır və fəaliyyət jurnalı/admin-profil girişi `200`-ə çevrilir.
+- **Backend API səviyyəsində tam yoxlanılıb** (throwaway komanda + iki test istifadəçisi ilə,
+  sonda təmizlənib): admin üzvü mentora təyin edir → köhnə token fəaliyyət jurnalına 403 alır →
+  `switchTeam` ilə təzələnmiş token 200 alır → mentor adminin profilini görə bilir (200) → mentor
+  özünü admin təyin edə bilmir (403) → mentor komandanı silə bilmir (403) → mentor tapşırığı
+  birbaşa sütundan-sütuna köçürə bilmir (admin-only "iş axınını keç" yoxlaması, 403) → mentor şərh
+  yaza bilir (201) → mentor tapşırığı silə bilmir (403). Hamısı gözlənilən nəticələri verdi.

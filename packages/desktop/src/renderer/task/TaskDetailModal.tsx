@@ -4,7 +4,7 @@ import { useUiStore } from "../store/uiStore";
 import { useCreateTask, useDeleteTask, useUpdateTask } from "../hooks/useTasks";
 import { useColumns } from "../hooks/useColumns";
 import { useProjects } from "../hooks/useProjects";
-import { ApiError } from "../api/client";
+import { ApiError, getToken, API_URL } from "../api/client";
 import CommentThread from "./CommentThread";
 import AttachmentPanel from "./AttachmentPanel";
 import DependencyPanel from "./DependencyPanel";
@@ -49,6 +49,11 @@ export default function TaskDetailModal({ teamId, task, newTaskColumnId, members
   const membersById = new Map(members.map((m) => [m.id, m]));
 
   const isNew = !task;
+  const currentColumn = columns?.find((c) => c.id === task?.columnId);
+  // Only the person actually doing the work sees this, and only once the
+  // task has moved to In Progress — before that there's nothing to "work
+  // on" yet, and it'd otherwise show on every task the admin looks at.
+  const showWorkChoice = !isNew && task?.assigneeId === user?.id && currentColumn?.type === "IN_PROGRESS";
 
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
@@ -208,6 +213,31 @@ export default function TaskDetailModal({ teamId, task, newTaskColumnId, members
             </div>
           )}
         </div>
+
+        {showWorkChoice && (
+          <div className="field">
+            <label>{t("task.workWhereQuestion")}</label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ width: "auto", padding: "6px 12px" }}
+                onClick={() => {
+                  const token = getToken();
+                  if (token) window.teamTracker.openIdeForTask(task!.id, token, API_URL);
+                }}
+              >
+                {t("task.workInternalIde")}
+              </button>
+              <button type="button" className="btn-secondary" style={{ width: "auto", padding: "6px 12px" }}>
+                {t("task.workExternalTool")}
+              </button>
+            </div>
+            <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6 }}>
+              {t("task.workSavedNotice")}
+            </div>
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
           <button className="btn-primary" disabled={saving || !title.trim()} onClick={handleSave}>

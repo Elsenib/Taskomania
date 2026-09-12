@@ -7,10 +7,11 @@ import {
   renameColumnSchema,
   createProjectSchema,
   renameProjectSchema,
+  setMemberRoleSchema,
 } from "@team-tracker/shared";
 import { prisma } from "../db";
-import { requireAuth, requireAdmin } from "../middleware/auth";
-import { toPublicUser, createInvite } from "../services/auth.service";
+import { requireAuth, requireAdmin, requireAdminOrMentor } from "../middleware/auth";
+import { toPublicUser, createInvite, setMemberRole } from "../services/auth.service";
 import * as taskService from "../services/task.service";
 import * as attachmentService from "../services/attachment.service";
 import * as dependencyService from "../services/dependency.service";
@@ -38,6 +39,24 @@ teamsRouter.get("/:teamId/members", async (req, res) => {
     include: { user: true },
   });
   res.json({ members: memberships.map((m) => toPublicUser(m.user, m.teamId, m.role)) });
+});
+
+// Promote a member to mentor, or demote a mentor back to member — see
+// auth.service.ts's setMemberRole for why "ADMIN" is never an accepted
+// value here (this can't mint a second admin).
+teamsRouter.patch("/:teamId/members/:userId/role", requireAdmin, async (req, res) => {
+  const parsed = setMemberRoleSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  try {
+    const publicUser = await setMemberRole(req.params.teamId, req.params.userId, parsed.data.role);
+    broadcastToTeam(req.auth!.teamId, "member:updated", publicUser);
+    res.json({ member: publicUser });
+  } catch (err) {
+    if (err instanceof AuthError) return res.status(err.status).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 teamsRouter.get("/:teamId/columns", async (req, res) => {
@@ -238,7 +257,7 @@ teamsRouter.get("/:teamId/members/:userId/profile", async (req, res) => {
 });
 
 // Admin-only audit trail: every column move across the whole team, newest first.
-teamsRouter.get("/:teamId/activity", requireAdmin, async (req, res) => {
+teamsRouter.get("/:teamId/activity", requireAdminOrMentor, async (req, res) => {
   const activity = await statsService.getTeamActivityFeed(req.params.teamId);
   res.json({ activity });
 });

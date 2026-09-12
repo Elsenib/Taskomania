@@ -1,8 +1,10 @@
 import { useState } from "react";
 import type { Attachment, Task } from "@team-tracker/shared";
 import { useMemberProfile, useTeamStats } from "../hooks/useProfile";
-import { useTeamMembers } from "../hooks/useTeamMembers";
+import { useTeamMembers, useSetMemberRole } from "../hooks/useTeamMembers";
+import { roleLabel } from "../lib/roleLabel";
 import Avatar from "../components/Avatar";
+import AvatarLightbox from "../components/AvatarLightbox";
 import PriorityBadge from "../task/PriorityBadge";
 import AttachmentPreviewModal from "../task/AttachmentPreviewModal";
 import { formatBytes } from "../lib/formatBytes";
@@ -54,10 +56,27 @@ export default function ProfileScreen({ teamId, userId, onClose }: Props) {
   const openTask = useUiStore((s) => s.openTask);
   const [previewing, setPreviewing] = useState<Attachment | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [avatarEnlarged, setAvatarEnlarged] = useState(false);
+  const [roleError, setRoleError] = useState<string | null>(null);
   const isOwnProfile = viewer?.id === userId;
+  const setMemberRole = useSetMemberRole(teamId);
 
   const membersById = new Map((members ?? []).map((m) => [m.id, m]));
   const ranked = [...(teamStats ?? [])].sort((a, b) => b.percentage - a.percentage);
+
+  // Admin promoting/demoting someone else — never the admin's own role, and
+  // never another admin's (setMemberRole rejects that server-side too; this
+  // just keeps the button from appearing where it'd only ever 400).
+  const canManageRole = viewer?.role === "ADMIN" && !isOwnProfile;
+
+  async function handleToggleRole(currentRole: "MENTOR" | "MEMBER") {
+    setRoleError(null);
+    try {
+      await setMemberRole.mutateAsync({ userId, role: currentRole === "MENTOR" ? "MEMBER" : "MENTOR" });
+    } catch (err) {
+      setRoleError(err instanceof ApiError ? err.message : t("common.roleChangeFailed"));
+    }
+  }
 
   return (
     <div style={{ height: "calc(100vh - 57px)", display: "flex", flexDirection: "column" }}>
@@ -96,14 +115,41 @@ export default function ProfileScreen({ teamId, userId, onClose }: Props) {
           ) : (
             <>
               <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                <Avatar displayName={profile.user.displayName} avatarUrl={profile.user.avatarUrl} size={56} fontSize={20} />
+                <button
+                  type="button"
+                  onClick={() => profile.user.avatarUrl && setAvatarEnlarged(true)}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: 0,
+                    cursor: profile.user.avatarUrl ? "pointer" : "default",
+                    borderRadius: "50%",
+                  }}
+                >
+                  <Avatar displayName={profile.user.displayName} avatarUrl={profile.user.avatarUrl} size={56} fontSize={20} />
+                </button>
                 <div>
                   <div style={{ fontSize: 17, fontWeight: 600, color: "var(--ink)" }}>{profile.user.displayName}</div>
-                  <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                    {profile.user.role === "ADMIN" ? t("common.roleAdmin") : t("common.roleMember")}
-                  </div>
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{roleLabel(profile.user.role, t)}</div>
+                  {canManageRole && profile.user.role !== "ADMIN" && (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ width: "auto", padding: "3px 10px", fontSize: 11, marginTop: 6 }}
+                      disabled={setMemberRole.isPending}
+                      onClick={() => handleToggleRole(profile.user.role as "MENTOR" | "MEMBER")}
+                    >
+                      {profile.user.role === "MENTOR" ? t("common.makeMember") : t("common.makeMentor")}
+                    </button>
+                  )}
                 </div>
               </div>
+
+              {roleError && (
+                <div className="form-error" style={{ marginTop: 10 }}>
+                  {roleError}
+                </div>
+              )}
 
               {profile.stats && (
                 <>
@@ -190,6 +236,13 @@ export default function ProfileScreen({ teamId, userId, onClose }: Props) {
 
       {previewing && <AttachmentPreviewModal attachment={previewing} onClose={() => setPreviewing(null)} />}
       {rulesOpen && <OnboardingModal onClose={() => setRulesOpen(false)} />}
+      {avatarEnlarged && profile?.user.avatarUrl && (
+        <AvatarLightbox
+          avatarUrl={profile.user.avatarUrl}
+          displayName={profile.user.displayName}
+          onClose={() => setAvatarEnlarged(false)}
+        />
+      )}
     </div>
   );
 }

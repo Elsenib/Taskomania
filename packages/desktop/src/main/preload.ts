@@ -12,4 +12,14 @@ contextBridge.exposeInMainWorld("teamTracker", {
   // back the in-app power menu's two options.
   sleepApp: () => ipcRenderer.send("app-sleep"),
   shutdownApp: () => ipcRenderer.send("app-shutdown"),
+  // Opens the IDE in its own window/session — see main/ide/ideWindow.ts.
+  openIde: () => ipcRenderer.send("ide:open"),
+  // Same, but scopes the IDE session to one task: its "Layihəni tapşırığa
+  // saxla" button will zip+upload the open project as that task's
+  // attachment. The token is handed to the MAIN process here (which the
+  // Board's own renderer already legitimately holds) — the IDE window's
+  // renderer itself never receives it, only the main process does, and
+  // only main process code ever makes the authenticated upload request.
+  openIdeForTask: (taskId: string, token: string, apiUrl: string) =>
+    ipcRenderer.send("ide:open", { taskId, token, apiUrl }),
 });

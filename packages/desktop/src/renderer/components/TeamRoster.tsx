@@ -21,7 +21,7 @@ export default function TeamRoster({
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
       {(members ?? []).map((m) => {
-        const viewable = viewerRole === "ADMIN" || m.role !== "ADMIN";
+        const viewable = viewerRole === "ADMIN" || viewerRole === "MENTOR" || m.role !== "ADMIN";
         return (
           <button
             key={m.id}

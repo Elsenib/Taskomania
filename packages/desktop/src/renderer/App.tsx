@@ -14,6 +14,8 @@ import ProfileScreen from "./profile/ProfileScreen";
 import SettingsScreen from "./settings/SettingsScreen";
 import OnboardingModal from "./components/OnboardingModal";
 import { useT } from "./i18n/useT";
+import { roleLabel } from "./lib/roleLabel";
+import ideIcon from "./assets/ide-icon.png";
 
 // Matches startup-animation.mp4's own length — the video should always play
 // through in full, never get cut off early just because the backend (often
@@ -101,7 +103,7 @@ export default function App() {
               }}
             >
               <Avatar displayName={user.displayName} avatarUrl={user.avatarUrl} />
-              {user.displayName} ({user.role === "ADMIN" ? t("common.roleAdmin") : t("common.roleMember")})
+              {user.displayName} ({roleLabel(user.role, t)})
             </button>
             {user.role === "ADMIN" && (
               <button
@@ -131,6 +133,27 @@ export default function App() {
                 <circle cx="8.5" cy="8.5" r="1.5" />
                 <path d="m21 15-5-5L5 21" />
               </svg>
+            </button>
+            <button
+              className="btn-secondary"
+              title={t("nav.ide")}
+              aria-label={t("nav.ide")}
+              style={{
+                width: 27,
+                height: 27,
+                marginLeft: 8,
+                padding: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              onClick={() => window.teamTracker.openIde()}
+            >
+              <img
+                src={ideIcon}
+                alt=""
+                style={{ display: "block", width: "100%", height: "100%", objectFit: "contain" }}
+              />
             </button>
             <button
               className="btn-secondary"

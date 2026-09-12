@@ -3,18 +3,20 @@ import { useAuth } from "../auth/AuthContext";
 import { useMyTeams, useInvalidateMyTeams } from "../hooks/useTeams";
 import { ApiError } from "../api/client";
 import { useT } from "../i18n/useT";
+import { roleLabel } from "../lib/roleLabel";
 
-type Mode = "list" | "create" | "join";
+type Mode = "list" | "create" | "join" | "delete";
 
 export default function TeamSwitcher() {
   const t = useT();
-  const { user, switchTeam, createAdditionalTeam, joinAdditionalTeam, leaveTeam } = useAuth();
+  const { user, switchTeam, createAdditionalTeam, joinAdditionalTeam, leaveTeam, deleteTeam } = useAuth();
   const { data: teams } = useMyTeams();
   const invalidateMyTeams = useInvalidateMyTeams();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("list");
   const [teamName, setTeamName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -100,6 +102,23 @@ export default function TeamSwitcher() {
     }
   }
 
+  async function handleDelete() {
+    if (deleteConfirmText.trim() !== currentTeam?.teamName) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteTeam(user!.teamId);
+      await invalidateMyTeams();
+      setDeleteConfirmText("");
+      setMode("list");
+      setOpen(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("teamSwitcher.deleteFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div ref={rootRef} style={{ position: "relative" }}>
       <button
@@ -165,7 +184,7 @@ export default function TeamSwitcher() {
                     {tm.teamName}
                   </span>
                   <span style={{ fontSize: 11, color: "var(--muted)", flexShrink: 0, marginLeft: 8 }}>
-                    {tm.role === "ADMIN" ? t("common.roleAdmin") : t("common.roleMember")}
+                    {roleLabel(tm.role, t)}
                   </span>
                 </button>
               ))}
@@ -197,7 +216,56 @@ export default function TeamSwitcher() {
                   {t("teamSwitcher.leaveTeam")}
                 </button>
               )}
+              {currentTeam?.role === "ADMIN" && (teams?.length ?? 0) > 1 && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setMode("delete")}
+                  style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 6px", border: "none", background: "transparent", color: "var(--priority-high-ink)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                >
+                  {t("teamSwitcher.deleteTeam")}
+                </button>
+              )}
             </>
+          )}
+
+          {mode === "delete" && (
+            <div>
+              <div style={{ margin: "4px 6px 10px", fontSize: 12.5, color: "var(--ink)", lineHeight: 1.4 }}>
+                {t("teamSwitcher.deleteWarning")}
+              </div>
+              <div className="field" style={{ margin: "4px 6px 8px" }}>
+                <label>
+                  {t("teamSwitcher.deleteConfirmLabel")} <strong>{currentTeam?.teamName}</strong>
+                </label>
+                <input
+                  autoFocus
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleDelete()}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 6, padding: "0 6px" }}>
+                <button
+                  className="btn-primary"
+                  style={{ width: "auto", flex: 1, background: "var(--priority-high-ink)", borderColor: "var(--priority-high-ink)" }}
+                  disabled={busy || deleteConfirmText.trim() !== currentTeam?.teamName}
+                  onClick={handleDelete}
+                >
+                  {t("teamSwitcher.deleteConfirmButton")}
+                </button>
+                <button
+                  className="btn-secondary"
+                  style={{ width: "auto", flexShrink: 0 }}
+                  onClick={() => {
+                    setMode("list");
+                    setDeleteConfirmText("");
+                  }}
+                >
+                  {t("teamSwitcher.back")}
+                </button>
+              </div>
+            </div>
           )}
 
           {mode === "create" && (

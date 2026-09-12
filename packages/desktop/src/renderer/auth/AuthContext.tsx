@@ -36,6 +36,7 @@ interface AuthContextValue {
   joinAdditionalTeam(inviteCode: string): Promise<void>;
   switchTeam(teamId: string): Promise<void>;
   leaveTeam(teamId: string): Promise<void>;
+  deleteTeam(teamId: string): Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -172,6 +173,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
         async leaveTeam(teamId) {
           const res = await apiFetch<AuthResponse>("/api/v1/auth/leave-team", {
+            method: "POST",
+            body: { teamId },
+          });
+          applyAuth(res);
+        },
+        async deleteTeam(teamId) {
+          const res = await apiFetch<AuthResponse>("/api/v1/auth/delete-team", {
             method: "POST",
             body: { teamId },
           });

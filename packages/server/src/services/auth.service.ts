@@ -222,6 +222,68 @@ export async function leaveTeam(userId: string, teamId: string) {
   return { token, teamId: next!.teamId, role: next!.role };
 }
 
+// Permanent, whole-team deletion — distinct from leaveTeam (which only
+// removes the caller). Re-checks the role against the DB rather than
+// trusting the caller's JWT (whose role/teamId reflect whatever team is
+// CURRENTLY active, which may not be the team being deleted) — this is
+// destructive enough to be worth the extra query. Only TeamMembership and
+// Project cascade automatically from Team in the schema; Invite/Task/Column
+// don't, so they're deleted explicitly, in dependency order, inside one
+// transaction (Task first — its own cascades take Comment/Attachment/
+// TaskActivity/TaskDependency with it — then Column, which Task referenced).
+export async function deleteTeam(userId: string, teamId: string) {
+  const membership = await prisma.teamMembership.findUnique({
+    where: { userId_teamId: { userId, teamId } },
+  });
+  if (!membership) throw new AuthError("Bu komandanın üzvü deyilsiniz", 403);
+  if (membership.role !== "ADMIN") {
+    throw new AuthError("Yalnız admin komandanı silə bilər", 403);
+  }
+
+  const myTeamCount = await prisma.teamMembership.count({ where: { userId } });
+  if (myTeamCount <= 1) {
+    throw new AuthError(
+      "Bu sizin yeganə komandanızdır — silmək əvəzinə əvvəlcə başqa bir komandaya qoşulun və ya yeni yaradın",
+      400
+    );
+  }
+
+  await prisma.$transaction([
+    prisma.invite.deleteMany({ where: { teamId } }),
+    prisma.task.deleteMany({ where: { teamId } }),
+    prisma.column.deleteMany({ where: { teamId } }),
+    prisma.team.delete({ where: { id: teamId } }),
+  ]);
+
+  const next = await prisma.teamMembership.findFirst({
+    where: { userId },
+    orderBy: { lastActiveAt: "desc" },
+  });
+  const token = issueSession(userId, next!.teamId, next!.role);
+  return { token, teamId: next!.teamId, role: next!.role };
+}
+
+// Admin promotes a MEMBER to MENTOR, or demotes a MENTOR back to MEMBER —
+// deliberately restricted to just these two roles (see setMemberRoleSchema
+// in @team-tracker/shared) so this can't be used as a backdoor to mint a
+// second admin. The route calling this already gates on requireAdmin.
+export async function setMemberRole(teamId: string, targetUserId: string, newRole: "MENTOR" | "MEMBER") {
+  const membership = await prisma.teamMembership.findUnique({
+    where: { userId_teamId: { userId: targetUserId, teamId } },
+  });
+  if (!membership) throw new AuthError("Bu komandanın üzvü deyil", 404);
+  if (membership.role === "ADMIN") {
+    throw new AuthError("Admin rolü buradan dəyişdirilə bilməz", 400);
+  }
+
+  const updated = await prisma.teamMembership.update({
+    where: { id: membership.id },
+    data: { role: newRole },
+    include: { user: true },
+  });
+  return toPublicUser(updated.user, teamId, updated.role);
+}
+
 export async function getMe(userId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new AuthError("User not found", 404);

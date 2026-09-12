@@ -132,6 +132,28 @@ authRouter.post("/leave-team", requireAuth, async (req, res) => {
   }
 });
 
+// Whole-team, permanent deletion (admin-only, re-verified against the DB
+// inside the service since the target team may not be the JWT's currently
+// active one). Broadcasts to the room BEFORE responding to the deleting
+// admin so any other connected member's client (useRealtimeSync.ts) hears
+// about it immediately — unlike leaving, this affects everyone in the team,
+// not just the actor, so it's the one membership-change event that can't
+// stay silent until next refetch.
+authRouter.post("/delete-team", requireAuth, async (req, res) => {
+  const parsed = switchTeamSchema.safeParse(req.body); // same shape: { teamId }
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  try {
+    const deletedTeamId = parsed.data.teamId;
+    const { token, teamId, role } = await authService.deleteTeam(req.auth!.userId, deletedTeamId);
+    broadcastToTeam(deletedTeamId, "team:deleted", { teamId: deletedTeamId });
+    const user = await authService.getMe(req.auth!.userId);
+    res.json({ token, user: authService.toPublicUser(user, teamId, role) });
+  } catch (err) {
+    handleAuthError(err, res);
+  }
+});
+
 function handleAuthError(err: unknown, res: import("express").Response) {
   if (err instanceof authService.AuthError) {
     return res.status(err.status).json({ error: err.message });
