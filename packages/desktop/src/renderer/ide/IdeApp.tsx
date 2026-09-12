@@ -11,9 +11,11 @@ import {
 } from "lucide-react";
 import FileTree from "./FileTree";
 import EditorPane from "./EditorPane";
+import ImagePreview from "./ImagePreview";
 import TerminalPane from "./TerminalPane";
 import DependencyGraphPane from "./DependencyGraphPane";
 import { getCodeOriginStats } from "./codeOriginTracker";
+import { isImageFile } from "../lib/fileKind";
 
 const SIDEBAR_MIN = 180;
 const SIDEBAR_MAX = 480;
@@ -32,6 +34,7 @@ export default function IdeApp() {
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
   const [content, setContent] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<"files" | "graph">("files");
   const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -152,6 +155,7 @@ export default function IdeApp() {
     if (root) {
       setProjectRoot(root);
       setOpenFilePath(null);
+      setImagePreviewUrl(null);
       setContent("");
       setDirty(false);
     }
@@ -169,6 +173,7 @@ export default function IdeApp() {
       const root = await window.ideAPI!.createNewProject(newProjectParent, newProjectName.trim());
       setProjectRoot(root);
       setOpenFilePath(null);
+      setImagePreviewUrl(null);
       setContent("");
       setDirty(false);
       setNewProjectOpen(false);
@@ -183,8 +188,17 @@ export default function IdeApp() {
     if (dirty && !window.confirm("Saxlanılmamış dəyişikliklər var. Davam edilsin?")) return;
     setError(null);
     try {
+      if (isImageFile(relPath)) {
+        const dataUrl = await window.ideAPI!.readImageDataUrl(relPath);
+        setOpenFilePath(relPath);
+        setImagePreviewUrl(dataUrl);
+        setContent("");
+        setDirty(false);
+        return;
+      }
       const fileContent = await window.ideAPI!.readFile(relPath);
       setOpenFilePath(relPath);
+      setImagePreviewUrl(null);
       setContent(fileContent);
       setDirty(false);
     } catch (err) {
@@ -555,15 +569,19 @@ export default function IdeApp() {
 
           <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-              <EditorPane
-                filePath={openFilePath}
-                content={content}
-                projectRoot={projectRoot}
-                onChange={(value) => {
-                  setContent(value);
-                  setDirty(true);
-                }}
-              />
+              {imagePreviewUrl && openFilePath ? (
+                <ImagePreview dataUrl={imagePreviewUrl} name={openFilePath} />
+              ) : (
+                <EditorPane
+                  filePath={openFilePath}
+                  content={content}
+                  projectRoot={projectRoot}
+                  onChange={(value) => {
+                    setContent(value);
+                    setDirty(true);
+                  }}
+                />
+              )}
             </div>
 
             {terminalOpen && (

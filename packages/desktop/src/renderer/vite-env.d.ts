@@ -29,6 +29,7 @@ interface Window {
     createNewProject(parentPath: string, name: string): Promise<string>;
     readDir(relPath: string): Promise<{ name: string; isDirectory: boolean }[]>;
     readFile(relPath: string): Promise<string>;
+    readImageDataUrl(relPath: string): Promise<string>;
     writeFile(relPath: string, content: string): Promise<void>;
     createFile(relPath: string): Promise<void>;
     createFolder(relPath: string): Promise<void>;

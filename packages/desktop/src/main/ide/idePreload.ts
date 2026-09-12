@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld("ideAPI", {
     ipcRenderer.invoke("project:createNew", { parentPath, name }),
   readDir: (relPath: string) => ipcRenderer.invoke("fs:readDir", relPath),
   readFile: (relPath: string): Promise<string> => ipcRenderer.invoke("fs:readFile", relPath),
+  readImageDataUrl: (relPath: string): Promise<string> =>
+    ipcRenderer.invoke("fs:readImageDataUrl", relPath),
   writeFile: (relPath: string, content: string): Promise<void> =>
     ipcRenderer.invoke("fs:writeFile", relPath, content),
   createFile: (relPath: string): Promise<void> => ipcRenderer.invoke("fs:createFile", relPath),

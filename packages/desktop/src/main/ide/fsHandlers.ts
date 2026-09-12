@@ -11,6 +11,17 @@ import path from "path";
 // outside the chosen folder, because the main process is the actual gate.
 let projectRoot: string | null = null;
 
+const IMAGE_MIME: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  webp: "image/webp",
+  bmp: "image/bmp",
+  ico: "image/x-icon",
+};
+
 function resolveInRoot(relPath: string): string {
   if (!projectRoot) throw new Error("Heç bir layihə qovluğu açıq deyil");
   const root = path.resolve(projectRoot);
@@ -78,6 +89,16 @@ export function registerFsHandlers() {
 
   ipcMain.handle("fs:readFile", async (_event, relPath: string): Promise<string> => {
     return fs.readFile(resolveInRoot(relPath), "utf-8");
+  });
+
+  // Images can't go through fs:readFile's utf-8 decoding (binary bytes come
+  // out as mojibake garbage in Monaco) — read as a Buffer instead and hand
+  // the renderer a ready-to-use data: URI for a plain <img src>.
+  ipcMain.handle("fs:readImageDataUrl", async (_event, relPath: string): Promise<string> => {
+    const buffer = await fs.readFile(resolveInRoot(relPath));
+    const ext = path.extname(relPath).slice(1).toLowerCase();
+    const mime = IMAGE_MIME[ext] ?? "application/octet-stream";
+    return `data:${mime};base64,${buffer.toString("base64")}`;
   });
 
   ipcMain.handle("fs:writeFile", async (_event, relPath: string, content: string): Promise<void> => {
