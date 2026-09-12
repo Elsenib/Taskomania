@@ -31,10 +31,10 @@ function FolderNode({ relPath, depth, onOpenFile, activeFile }: NodeProps) {
         <div
           onClick={() => setExpanded((e) => !e)}
           style={{
-            paddingLeft: depth * 14,
             cursor: "pointer",
             fontSize: 12.5,
             padding: "3px 6px",
+            paddingLeft: depth * 14,
             display: "flex",
             alignItems: "center",
             gap: 5,
@@ -94,10 +94,10 @@ function FileRow({
     <div
       onClick={onClick}
       style={{
-        paddingLeft: (depth + 1) * 14 + 15,
         cursor: "pointer",
         fontSize: 12.5,
         padding: "3px 6px",
+        paddingLeft: (depth + 1) * 14 + 15,
         display: "flex",
         alignItems: "center",
         gap: 5,
