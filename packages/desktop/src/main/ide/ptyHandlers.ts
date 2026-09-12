@@ -18,31 +18,39 @@ let nextId = 1;
 // boundary, not any command allow/deny-listing (which would be both
 // incomplete and would defeat the point of a real terminal).
 export function registerPtyHandlers() {
-  ipcMain.handle("pty:spawn", async (event, cwd: string): Promise<string> => {
-    const pty = await import("node-pty");
-    const shell = os.platform() === "win32" ? "powershell.exe" : process.env.SHELL || "bash";
-    const proc = pty.spawn(shell, [], {
-      name: "xterm-color",
-      cols: 80,
-      rows: 30,
-      cwd,
-      env: process.env as { [key: string]: string },
-    });
+  ipcMain.handle(
+    "pty:spawn",
+    async (event, { cwd, shell: shellChoice }: { cwd: string; shell?: "cmd" | "powershell" }): Promise<string> => {
+      const pty = await import("node-pty");
+      const shell =
+        os.platform() === "win32"
+          ? shellChoice === "cmd"
+            ? "cmd.exe"
+            : "powershell.exe"
+          : process.env.SHELL || "bash";
+      const proc = pty.spawn(shell, [], {
+        name: "xterm-color",
+        cols: 80,
+        rows: 30,
+        cwd,
+        env: process.env as { [key: string]: string },
+      });
 
-    const id = String(nextId++);
-    const win = BrowserWindow.fromWebContents(event.sender);
-    sessions.set(id, { proc });
+      const id = String(nextId++);
+      const win = BrowserWindow.fromWebContents(event.sender);
+      sessions.set(id, { proc });
 
-    proc.onData((data) => {
-      if (win && !win.isDestroyed()) win.webContents.send("pty:data", { sessionId: id, data });
-    });
-    proc.onExit(() => {
-      if (win && !win.isDestroyed()) win.webContents.send("pty:exit", { sessionId: id });
-      sessions.delete(id);
-    });
+      proc.onData((data) => {
+        if (win && !win.isDestroyed()) win.webContents.send("pty:data", { sessionId: id, data });
+      });
+      proc.onExit(() => {
+        if (win && !win.isDestroyed()) win.webContents.send("pty:exit", { sessionId: id });
+        sessions.delete(id);
+      });
 
-    return id;
-  });
+      return id;
+    }
+  );
 
   ipcMain.on("pty:write", (_event, { sessionId, data }: { sessionId: string; data: string }) => {
     sessions.get(sessionId)?.proc.write(data);

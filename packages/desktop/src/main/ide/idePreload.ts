@@ -7,6 +7,7 @@ import { contextBridge, ipcRenderer } from "electron";
 // path-containment check backing every fs:* call.
 contextBridge.exposeInMainWorld("ideAPI", {
   isIde: true,
+  platform: process.platform,
 
   openProjectFolder: (): Promise<string | null> => ipcRenderer.invoke("dialog:openProjectFolder"),
   getProjectRoot: (): Promise<string | null> => ipcRenderer.invoke("fs:getProjectRoot"),
@@ -27,7 +28,8 @@ contextBridge.exposeInMainWorld("ideAPI", {
   // ptyWrite must ONLY ever be called from TerminalPane.tsx's own
   // xterm.onData() handler (real keystrokes) — see ptyHandlers.ts's comment
   // for why that single rule is what makes this a "restricted" terminal.
-  ptySpawn: (cwd: string): Promise<string> => ipcRenderer.invoke("pty:spawn", cwd),
+  ptySpawn: (cwd: string, shell?: "cmd" | "powershell"): Promise<string> =>
+    ipcRenderer.invoke("pty:spawn", { cwd, shell }),
   ptyWrite: (sessionId: string, data: string): void =>
     ipcRenderer.send("pty:write", { sessionId, data }),
   ptyResize: (sessionId: string, cols: number, rows: number): void =>

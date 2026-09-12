@@ -8,7 +8,7 @@ import "@xterm/xterm/css/xterm.css";
 // ideAPI.ptyWrite is term.onData() below — real local keystrokes, nothing
 // else. That single invariant is what keeps this terminal "restricted": no
 // task data, no socket event, no other code path can ever feed it input.
-export default function TerminalPane({ cwd }: { cwd: string }) {
+export default function TerminalPane({ cwd, shell }: { cwd: string; shell?: "cmd" | "powershell" }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,7 +30,7 @@ export default function TerminalPane({ cwd }: { cwd: string }) {
     fitAddon.fit();
 
     window.ideAPI!
-      .ptySpawn(cwd)
+      .ptySpawn(cwd, shell)
       .then((id) => {
         if (disposed) {
           window.ideAPI!.ptyKill(id);
@@ -66,7 +66,7 @@ export default function TerminalPane({ cwd }: { cwd: string }) {
       if (sessionId) window.ideAPI!.ptyKill(sessionId);
       term.dispose();
     };
-  }, [cwd]);
+  }, [cwd, shell]);
 
   return <div ref={containerRef} style={{ height: "100%", padding: "6px 8px" }} />;
 }

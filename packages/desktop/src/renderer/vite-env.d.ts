@@ -22,6 +22,7 @@ interface Window {
   // root component to mount.
   ideAPI?: {
     isIde: true;
+    platform: string;
     openProjectFolder(): Promise<string | null>;
     getProjectRoot(): Promise<string | null>;
     pickFolder(): Promise<string | null>;
@@ -33,7 +34,7 @@ interface Window {
     createFolder(relPath: string): Promise<void>;
     renamePath(fromRel: string, toRel: string): Promise<void>;
     deletePath(relPath: string): Promise<void>;
-    ptySpawn(cwd: string): Promise<string>;
+    ptySpawn(cwd: string, shell?: "cmd" | "powershell"): Promise<string>;
     ptyWrite(sessionId: string, data: string): void;
     ptyResize(sessionId: string, cols: number, rows: number): void;
     ptyKill(sessionId: string): void;
