@@ -35,6 +35,7 @@ interface Window {
     createFolder(relPath: string): Promise<void>;
     renamePath(fromRel: string, toRel: string): Promise<void>;
     deletePath(relPath: string): Promise<void>;
+    onFsChanged(callback: () => void): () => void;
     ptySpawn(cwd: string, shell?: "cmd" | "powershell"): Promise<string>;
     ptyWrite(sessionId: string, data: string): void;
     ptyResize(sessionId: string, cols: number, rows: number): void;

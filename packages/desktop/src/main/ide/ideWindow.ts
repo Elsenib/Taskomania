@@ -4,6 +4,7 @@ import { killAllPtySessions } from "./ptyHandlers";
 import { killAllLspSessions } from "./lspHandlers";
 import { setTaskContext, type TaskContext } from "./taskContext";
 import { killGoLiveServer } from "./goLiveServer";
+import { stopWatching } from "./fsHandlers";
 
 const isDev = process.env.NODE_ENV === "development";
 const iconPath = path.join(__dirname, "../../build/icon.png");
@@ -62,6 +63,7 @@ export function openIdeWindow(taskContext?: TaskContext) {
     killAllPtySessions();
     killAllLspSessions();
     killGoLiveServer();
+    stopWatching();
     setTaskContext(null);
     ideWindow = null;
   });

@@ -1,5 +1,6 @@
 import { ipcMain, dialog, BrowserWindow } from "electron";
 import fs from "fs/promises";
+import { watch, type FSWatcher } from "fs";
 import path from "path";
 
 // One open project per app instance (matches the plan: a single IDE window
@@ -21,6 +22,39 @@ const IMAGE_MIME: Record<string, string> = {
   bmp: "image/bmp",
   ico: "image/x-icon",
 };
+
+let watcher: FSWatcher | null = null;
+let watchDebounce: NodeJS.Timeout | null = null;
+
+// The file tree only re-reads a folder on explicit create/delete/move —
+// with no watcher, anything that changes the project from OUTSIDE those
+// actions (typing `npm create vite@latest .` in the built-in terminal,
+// git checkout, another editor) is invisible until the window is closed
+// and reopened. Debounced because a single scaffold command can touch
+// hundreds of files within milliseconds of each other — one refresh at
+// the end, not hundreds mid-write.
+function startWatching(root: string, win: BrowserWindow) {
+  watcher?.close();
+  watcher = null;
+  try {
+    watcher = watch(root, { recursive: true }, () => {
+      if (watchDebounce) clearTimeout(watchDebounce);
+      watchDebounce = setTimeout(() => {
+        if (!win.isDestroyed()) win.webContents.send("fs:changed");
+      }, 400);
+    });
+  } catch {
+    // `recursive` isn't supported on every platform/fs — the tree still
+    // works, it just falls back to only refreshing on its own actions.
+    watcher = null;
+  }
+}
+
+export function stopWatching() {
+  if (watchDebounce) clearTimeout(watchDebounce);
+  watcher?.close();
+  watcher = null;
+}
 
 function resolveInRoot(relPath: string): string {
   if (!projectRoot) throw new Error("Heç bir layihə qovluğu açıq deyil");
@@ -50,6 +84,7 @@ export function registerFsHandlers() {
     const result = await dialog.showOpenDialog(win!, { properties: ["openDirectory"] });
     if (result.canceled || result.filePaths.length === 0) return null;
     projectRoot = result.filePaths[0];
+    if (win) startWatching(projectRoot, win);
     return projectRoot;
   });
 
@@ -70,10 +105,12 @@ export function registerFsHandlers() {
   // counterpart to opening an existing folder.
   ipcMain.handle(
     "project:createNew",
-    async (_event, { parentPath, name }: { parentPath: string; name: string }): Promise<string> => {
+    async (event, { parentPath, name }: { parentPath: string; name: string }): Promise<string> => {
       const fullPath = path.join(parentPath, name);
       await fs.mkdir(fullPath, { recursive: false });
       projectRoot = fullPath;
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (win) startWatching(projectRoot, win);
       return fullPath;
     }
   );

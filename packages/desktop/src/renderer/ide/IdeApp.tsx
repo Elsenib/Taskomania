@@ -216,6 +216,33 @@ export default function IdeApp() {
     }
   }
 
+  // Called by FileTree after it deletes a path, or moves one away from
+  // wherever it used to be (drag-and-drop) — the editor's own openFilePath
+  // would otherwise keep pointing at a path that's now gone or wrong,
+  // silently letting the user keep "editing" a file that no longer exists
+  // there. isDirectory matters for delete: deleting a folder should close
+  // every open file that lived under it, not just an exact path match.
+  function handlePathRemoved(relPath: string, isDirectory: boolean) {
+    if (!openFilePath) return;
+    const affected = isDirectory
+      ? openFilePath === relPath || openFilePath.startsWith(relPath + "/")
+      : openFilePath === relPath;
+    if (!affected) return;
+    setOpenFilePath(null);
+    setImagePreviewUrl(null);
+    setContent("");
+    setDirty(false);
+  }
+
+  function handlePathMoved(fromRelPath: string, toRelPath: string) {
+    if (!openFilePath) return;
+    if (openFilePath === fromRelPath) {
+      setOpenFilePath(toRelPath);
+    } else if (openFilePath.startsWith(fromRelPath + "/")) {
+      setOpenFilePath(toRelPath + openFilePath.slice(fromRelPath.length));
+    }
+  }
+
   const handleSave = useCallback(async () => {
     if (!openFilePath || !dirty) return;
     try {
@@ -544,7 +571,13 @@ export default function IdeApp() {
                 </div>
                 {sidebarTab === "files" ? (
                   <div className="thin-scroll" style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
-                    <FileTree key={projectRoot} onOpenFile={handleOpenFile} activeFile={openFilePath} />
+                    <FileTree
+                      key={projectRoot}
+                      onOpenFile={handleOpenFile}
+                      activeFile={openFilePath}
+                      onPathRemoved={handlePathRemoved}
+                      onPathMoved={handlePathMoved}
+                    />
                   </div>
                 ) : (
                   <DependencyGraphPane projectRoot={projectRoot} onOpenFile={handleOpenFile} />

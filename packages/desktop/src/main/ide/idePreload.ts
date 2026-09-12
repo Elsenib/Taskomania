@@ -25,6 +25,15 @@ contextBridge.exposeInMainWorld("ideAPI", {
   renamePath: (fromRel: string, toRel: string): Promise<void> =>
     ipcRenderer.invoke("fs:rename", fromRel, toRel),
   deletePath: (relPath: string): Promise<void> => ipcRenderer.invoke("fs:delete", relPath),
+  // Fired when anything changes under the project root from OUTSIDE the
+  // tree's own create/delete/move actions — scaffolding tools run in the
+  // terminal (`npm create vite@latest .`), git, another editor. Debounced
+  // in the main process (fsHandlers.ts) so one big write burst is one event.
+  onFsChanged: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("fs:changed", listener);
+    return () => ipcRenderer.removeListener("fs:changed", listener);
+  },
 
   // Terminal — ptySpawn/ptyResize/ptyKill are invoke/send wrappers only.
   // ptyWrite must ONLY ever be called from TerminalPane.tsx's own
