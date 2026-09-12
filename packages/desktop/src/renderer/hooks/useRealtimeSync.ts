@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Task, Comment, Attachment, TaskDependency, Column, User, Project } from "@team-tracker/shared";
+import type { Task, Comment, Message, Attachment, TaskDependency, Column, User, Project } from "@team-tracker/shared";
 import { getSocket } from "../api/socket";
 import { useAuth } from "../auth/AuthContext";
 import { wasRecentlyMutatedByMe } from "./useTasks";
@@ -15,6 +15,8 @@ export function useRealtimeSync(teamId: string) {
   const queryClient = useQueryClient();
   const { user, logout, switchTeam } = useAuth();
   const openTask = useUiStore((s) => s.openTask);
+  const openChat = useUiStore((s) => s.openChat);
+  const chatOpen = useUiStore((s) => s.chatOpen);
 
   useEffect(() => {
     const socket = getSocket();
@@ -139,6 +141,19 @@ export function useRealtimeSync(teamId: string) {
       }
     };
 
+    const onMessageCreated = (message: Message) => {
+      queryClient.setQueryData<{ messages: Message[] }>(["messages", message.teamId], (old) => {
+        if (!old) return old;
+        if (old.messages.some((m) => m.id === message.id)) return old;
+        return { messages: [...old.messages, message] };
+      });
+
+      if (message.authorId === user.id) return;
+      if (!chatOpen) {
+        notify("Yeni mesaj", message.body, () => openChat());
+      }
+    };
+
     const onAttachmentCreated = (attachment: Attachment) => {
       queryClient.setQueryData<{ attachments: Attachment[] }>(
         ["attachments", attachment.taskId],
@@ -220,6 +235,7 @@ export function useRealtimeSync(teamId: string) {
     socket.on("task:updated", onTaskUpdated);
     socket.on("task:deleted", onTaskDeleted);
     socket.on("comment:created", onCommentCreated);
+    socket.on("message:created", onMessageCreated);
     socket.on("attachment:created", onAttachmentCreated);
     socket.on("attachment:deleted", onAttachmentDeleted);
     socket.on("dependency:created", onDependencyCreated);
@@ -238,11 +254,12 @@ export function useRealtimeSync(teamId: string) {
       socket.off("task:updated", onTaskUpdated);
       socket.off("task:deleted", onTaskDeleted);
       socket.off("comment:created", onCommentCreated);
+      socket.off("message:created", onMessageCreated);
       socket.off("attachment:created", onAttachmentCreated);
       socket.off("attachment:deleted", onAttachmentDeleted);
       socket.off("dependency:created", onDependencyCreated);
       socket.off("dependency:deleted", onDependencyDeleted);
       socket.off("team:deleted", onTeamDeleted);
     };
-  }, [teamId, queryClient, user, openTask, logout, switchTeam]);
+  }, [teamId, queryClient, user, openTask, logout, switchTeam, openChat, chatOpen]);
 }

@@ -43,6 +43,7 @@ model Team {
   columns     Column[]
   tasks       Task[]
   projects    Project[]
+  messages    Message[]
 }
 
 // One user can belong to several teams (a different role in each) — this is
@@ -86,6 +87,7 @@ model User {
   createdTasks   Task[]    @relation("TaskCreatedBy")
   comments       Comment[]
   attachments    Attachment[]
+  messages       Message[]
 }
 
 model Invite {
@@ -226,6 +228,24 @@ model Comment {
   author   User   @relation(fields: [authorId], references: [id])
 
   @@index([taskId])
+}
+
+// Team-wide chat message — same shape as Comment, scoped to a team instead
+// of a task. Broadcasts into the socket room every team member's socket
+// already joins on connect (see socket.ts), so no new room-join logic is
+// needed on either side.
+model Message {
+  id        String   @id @default(uuid())
+  body      String
+  createdAt DateTime @default(now())
+
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  @@index([teamId, createdAt])
 }
 
 model Attachment {

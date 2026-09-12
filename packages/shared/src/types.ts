@@ -75,6 +75,14 @@ export interface Comment {
   createdAt: string;
 }
 
+export interface Message {
+  id: string;
+  teamId: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface TaskActivity {
   id: string;
   taskId: string;
@@ -174,6 +182,7 @@ export interface ServerToClientEvents {
   "task:updated": (task: Task) => void;
   "task:deleted": (payload: { id: string }) => void;
   "comment:created": (comment: Comment) => void;
+  "message:created": (message: Message) => void;
   "attachment:created": (attachment: Attachment) => void;
   "attachment:deleted": (payload: { id: string; taskId: string }) => void;
   "dependency:created": (dependency: TaskDependency) => void;

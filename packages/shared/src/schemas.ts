@@ -75,6 +75,10 @@ export const createCommentSchema = z.object({
   body: z.string().min(1).max(5000),
 });
 
+export const createMessageSchema = z.object({
+  body: z.string().min(1).max(5000),
+});
+
 export const createInviteSchema = z.object({
   expiresInDays: z.number().int().positive().max(30).optional(),
 });

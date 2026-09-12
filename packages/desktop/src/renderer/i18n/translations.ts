@@ -32,9 +32,16 @@ export const translations = {
     "nav.invite": "Dəvət et",
     "nav.graph": "Qraf",
     "nav.ide": "IDE",
+    "nav.chat": "Söhbət",
     "nav.settings": "Ayarlar",
     "nav.logout": "Çıxış",
     "app.connectionErrorSubtitle": "Sessiyan qorunub, sadəcə backend-ə qoşulmaq alınmadı",
+
+    "chat.title": "Komanda söhbəti",
+    "chat.placeholder": "Mesaj yaz...",
+    "chat.empty": "Hələ heç bir mesaj yoxdur.",
+    "chat.loadError": "Mesajlar yüklənə bilmədi",
+    "chat.sendFailed": "Mesaj göndərilə bilmədi",
 
     "auth.loginSubtitle": "Hesabına daxil ol",
     "auth.createSubtitle": "Komandan üçün yeni sahə yarat",
@@ -261,9 +268,16 @@ export const translations = {
     "nav.invite": "Invite",
     "nav.graph": "Graph",
     "nav.ide": "IDE",
+    "nav.chat": "Chat",
     "nav.settings": "Settings",
     "nav.logout": "Log out",
     "app.connectionErrorSubtitle": "Your session is safe, the app just couldn't reach the backend",
+
+    "chat.title": "Team chat",
+    "chat.placeholder": "Write a message...",
+    "chat.empty": "No messages yet.",
+    "chat.loadError": "Couldn't load messages",
+    "chat.sendFailed": "Couldn't send the message",
 
     "auth.loginSubtitle": "Sign in to your account",
     "auth.createSubtitle": "Create a new space for your team",

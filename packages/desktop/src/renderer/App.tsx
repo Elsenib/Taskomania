@@ -13,8 +13,10 @@ import TeamSwitcher from "./components/TeamSwitcher";
 import ProfileScreen from "./profile/ProfileScreen";
 import SettingsScreen from "./settings/SettingsScreen";
 import OnboardingModal from "./components/OnboardingModal";
+import ChatPanel from "./components/ChatPanel";
 import { useT } from "./i18n/useT";
 import { roleLabel } from "./lib/roleLabel";
+import { useUiStore } from "./store/uiStore";
 import ideIcon from "./assets/ide-icon.png";
 
 // Matches startup-animation.mp4's own length — the video should always play
@@ -30,6 +32,9 @@ export default function App() {
   const [minAnimationElapsed, setMinAnimationElapsed] = useState(false);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const chatOpen = useUiStore((s) => s.chatOpen);
+  const openChat = useUiStore((s) => s.openChat);
+  const closeChat = useUiStore((s) => s.closeChat);
 
   // Profile is a full screen (like Graph/Canvas), reachable from anywhere —
   // the roster, your own header button, or a node in the Graph.
@@ -157,6 +162,17 @@ export default function App() {
             </button>
             <button
               className="btn-secondary"
+              title={t("nav.chat")}
+              aria-label={t("nav.chat")}
+              style={{ width: "auto", marginLeft: 8, padding: "5px 8px", display: "flex" }}
+              onClick={() => (chatOpen ? closeChat() : openChat())}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </button>
+            <button
+              className="btn-secondary"
               title={t("nav.settings")}
               aria-label={t("nav.settings")}
               style={{ width: "auto", marginLeft: 8, padding: "5px 8px", display: "flex" }}
@@ -179,6 +195,7 @@ export default function App() {
         <Board teamId={user.teamId} />
         {inviteOpen && <InviteModal teamId={user.teamId} onClose={() => setInviteOpen(false)} />}
         {settingsOpen && <SettingsScreen onClose={() => setSettingsOpen(false)} />}
+        {chatOpen && <ChatPanel onClose={closeChat} />}
       </div>
     );
   }

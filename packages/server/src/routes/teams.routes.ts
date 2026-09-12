@@ -8,6 +8,7 @@ import {
   createProjectSchema,
   renameProjectSchema,
   setMemberRoleSchema,
+  createMessageSchema,
 } from "@team-tracker/shared";
 import { prisma } from "../db";
 import { requireAuth, requireAdmin, requireAdminOrMentor } from "../middleware/auth";
@@ -17,6 +18,7 @@ import * as attachmentService from "../services/attachment.service";
 import * as dependencyService from "../services/dependency.service";
 import * as statsService from "../services/stats.service";
 import * as projectService from "../services/project.service";
+import * as messageService from "../services/message.service";
 import { AuthError } from "../services/auth.service";
 import { broadcastToTeam } from "../socket";
 
@@ -308,6 +310,33 @@ teamsRouter.post("/:teamId/tasks", async (req, res) => {
     const publicTask = taskService.toPublicTask(task);
     broadcastToTeam(req.params.teamId, "task:created", publicTask);
     res.status(201).json({ task: publicTask });
+  } catch (err) {
+    if (err instanceof AuthError) return res.status(err.status).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+teamsRouter.get("/:teamId/messages", async (req, res) => {
+  try {
+    const messages = await messageService.listMessages(req.params.teamId);
+    res.json({ messages: messages.map(messageService.toPublicMessage) });
+  } catch (err) {
+    if (err instanceof AuthError) return res.status(err.status).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+teamsRouter.post("/:teamId/messages", async (req, res) => {
+  const parsed = createMessageSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  try {
+    const message = await messageService.createMessage(req.params.teamId, req.auth!.userId, parsed.data.body);
+    const publicMessage = messageService.toPublicMessage(message);
+    broadcastToTeam(req.params.teamId, "message:created", publicMessage);
+    res.status(201).json({ message: publicMessage });
   } catch (err) {
     if (err instanceof AuthError) return res.status(err.status).json({ error: err.message });
     console.error(err);
