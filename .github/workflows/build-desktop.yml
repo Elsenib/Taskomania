@@ -1,0 +1,36 @@
+name: Build desktop app
+
+# The Windows installer bundles node-pty, a native module that must be
+# compiled against Electron's own Node ABI (via @electron/rebuild + node-gyp)
+# at package time. That native toolchain (MSVC, Python, winpty's own gyp
+# dependency scripts) is fragile to get right on an arbitrary local dev
+# machine — this workflow builds it instead on a clean, disposable
+# windows-latest runner where it's known to work.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm install
+
+      - run: npm run build:shared
+
+      - name: Build Windows installer
+        run: npm run package --workspace=@team-tracker/desktop
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: taskomania-windows-installer
+          path: packages/desktop/release/*.exe
+          if-no-files-found: error
