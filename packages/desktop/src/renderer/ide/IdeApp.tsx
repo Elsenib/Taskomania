@@ -36,6 +36,7 @@ export default function IdeApp() {
   const [content, setContent] = useState("");
   const [dirty, setDirty] = useState(false);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [pendingFileSwitch, setPendingFileSwitch] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<"files" | "graph">("files");
   const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -194,8 +195,7 @@ export default function IdeApp() {
     }
   }
 
-  async function handleOpenFile(relPath: string) {
-    if (dirty && !window.confirm("Saxlanılmamış dəyişikliklər var. Davam edilsin?")) return;
+  async function openFileNow(relPath: string) {
     setError(null);
     try {
       if (isImageFile(relPath)) {
@@ -214,6 +214,22 @@ export default function IdeApp() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Fayl açıla bilmədi");
     }
+  }
+
+  // Deliberately NOT window.confirm() — a real blocking native dialog,
+  // shown while Monaco (in the file being switched away from) still has
+  // focus, was leaving the whole BrowserWindow without proper keyboard
+  // focus afterward: typing in the NEXT file (a freshly mounted Monaco
+  // instance, not the same one) silently did nothing until the window was
+  // minimized and restored, which forces Windows to re-establish window
+  // focus. A plain React-rendered prompt never hands control to a native
+  // dialog, so that focus handoff never happens in the first place.
+  function handleOpenFile(relPath: string) {
+    if (dirty) {
+      setPendingFileSwitch(relPath);
+      return;
+    }
+    openFileNow(relPath);
   }
 
   // Called by FileTree after it deletes a path, or moves one away from
@@ -746,6 +762,51 @@ export default function IdeApp() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {pendingFileSwitch && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+          }}
+        >
+          <div
+            style={{
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              padding: 18,
+              width: 340,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
+            }}
+          >
+            <div style={{ fontSize: 13.5, color: "var(--ink)", marginBottom: 14 }}>
+              Saxlanılmamış dəyişikliklər var. Davam edilsin?
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="btn-primary"
+                style={{ flex: 1 }}
+                onClick={() => {
+                  const target = pendingFileSwitch;
+                  setPendingFileSwitch(null);
+                  openFileNow(target);
+                }}
+              >
+                Davam et
+              </button>
+              <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setPendingFileSwitch(null)}>
+                İmtina
+              </button>
+            </div>
           </div>
         </div>
       )}
