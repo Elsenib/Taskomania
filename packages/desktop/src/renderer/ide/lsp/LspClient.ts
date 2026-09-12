@@ -37,7 +37,11 @@ export class LspClient {
       const pending = this.pending.get(message.id as number);
       if (!pending) return;
       this.pending.delete(message.id as number);
-      if (message.error) pending.reject(message.error);
+      if (message.error) {
+        const err = message.error as { message?: string; code?: number } | string;
+        const text = typeof err === "string" ? err : (err?.message ?? JSON.stringify(err));
+        pending.reject(new Error(text));
+      }
       else pending.resolve(message.result);
     } else if (typeof message.method === "string") {
       const handlers = this.notificationHandlers.get(message.method);
