@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import { iconForFile, Folder, FolderOpen, FOLDER_COLOR } from "./fileIcons";
 
 interface Entry {
@@ -341,6 +341,14 @@ export default function FileTree({
   const [createError, setCreateError] = useState<string | null>(null);
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
   const [rootDragOver, setRootDragOver] = useState(false);
+  // Neither of these is window.confirm()/alert() — see IdeApp.tsx's
+  // pendingFileSwitch comment for why: a real native dialog shown while
+  // Monaco has focus can leave the whole BrowserWindow without keyboard
+  // focus afterward. Delete and move both can be triggered by a drag or a
+  // click that happens right after the user was typing, so they get the
+  // same non-native treatment.
+  const [pendingDelete, setPendingDelete] = useState<{ relPath: string; isDirectory: boolean } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   function requestCreate(dirPath: string, kind: "file" | "folder") {
     setCreatingIn(dirPath);
@@ -370,18 +378,20 @@ export default function FileTree({
     }
   }
 
-  async function handleDelete(relPath: string, isDirectory: boolean) {
-    const label = relPath.split("/").pop();
-    const question = isDirectory
-      ? `"${label}" qovluğunu (içindəki hər şeylə birlikdə) silmək istədiyinizə əminsiniz?`
-      : `"${label}" faylını silmək istədiyinizə əminsiniz?`;
-    if (!window.confirm(question)) return;
+  function handleDelete(relPath: string, isDirectory: boolean) {
+    setPendingDelete({ relPath, isDirectory });
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    const { relPath, isDirectory } = pendingDelete;
+    setPendingDelete(null);
     try {
       await window.ideAPI!.deletePath(relPath);
       onPathRemoved?.(relPath, isDirectory);
       setRefreshGen((n) => n + 1);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Silinə bilmədi");
+      setActionError(err instanceof Error ? err.message : "Silinə bilmədi");
     }
   }
 
@@ -389,7 +399,7 @@ export default function FileTree({
     setDraggingPath(null);
     if (fromRelPath === toDirPath) return;
     if (toDirPath === fromRelPath || toDirPath.startsWith(fromRelPath + "/")) {
-      window.alert("Qovluğu öz daxilinə köçürmək olmaz");
+      setActionError("Qovluğu öz daxilinə köçürmək olmaz");
       return;
     }
     const fromParent = fromRelPath.includes("/") ? fromRelPath.slice(0, fromRelPath.lastIndexOf("/")) : "";
@@ -401,7 +411,7 @@ export default function FileTree({
       onPathMoved?.(fromRelPath, toRelPath);
       setRefreshGen((n) => n + 1);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Köçürülə bilmədi");
+      setActionError(err instanceof Error ? err.message : "Köçürülə bilmədi");
     }
   }
 
@@ -443,6 +453,29 @@ export default function FileTree({
         if (from) handleMove(from, "");
       }}
     >
+      {actionError && (
+        <div
+          style={{
+            margin: "0 8px 8px",
+            padding: "6px 8px",
+            fontSize: 11.5,
+            color: "var(--priority-high-ink)",
+            background: "var(--paper-panel)",
+            borderRadius: 6,
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 8,
+          }}
+        >
+          <span>{actionError}</span>
+          <button
+            onClick={() => setActionError(null)}
+            style={{ border: "none", background: "transparent", color: "inherit", cursor: "pointer", flexShrink: 0 }}
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
       <div style={{ display: "flex", gap: 6, padding: "0 8px 8px" }}>
         <button
           onClick={() => requestCreate("", "file")}
@@ -478,6 +511,50 @@ export default function FileTree({
       {creatingIn === "" && <CreateInput depth={0} ctx={ctx} />}
       <FolderNode relPath="" depth={0} ctx={ctx} />
       <div style={{ minHeight: 24, flex: 1, background: rootDragOver ? "var(--accent-paper)" : "transparent" }} />
+
+      {pendingDelete && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+          }}
+        >
+          <div
+            style={{
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              padding: 18,
+              width: 340,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
+            }}
+          >
+            <div style={{ fontSize: 13.5, color: "var(--ink)", marginBottom: 14 }}>
+              "{pendingDelete.relPath.split("/").pop()}"{" "}
+              {pendingDelete.isDirectory
+                ? "qovluğunu (içindəki hər şeylə birlikdə) silmək istədiyinizə əminsiniz?"
+                : "faylını silmək istədiyinizə əminsiniz?"}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="btn-primary"
+                style={{ flex: 1, background: "var(--priority-high-ink)", borderColor: "var(--priority-high-ink)" }}
+                onClick={confirmDelete}
+              >
+                Sil
+              </button>
+              <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setPendingDelete(null)}>
+                İmtina
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
