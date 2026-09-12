@@ -87,7 +87,8 @@ model User {
   createdTasks   Task[]    @relation("TaskCreatedBy")
   comments       Comment[]
   attachments    Attachment[]
-  messages       Message[]
+  messages       Message[] @relation("MessageAuthor")
+  receivedMessages Message[] @relation("MessageRecipient")
 }
 
 model Invite {
@@ -232,8 +233,10 @@ model Comment {
 
 // Team-wide chat message — same shape as Comment, scoped to a team instead
 // of a task. Broadcasts into the socket room every team member's socket
-// already joins on connect (see socket.ts), so no new room-join logic is
-// needed on either side.
+// already joins on connect (see socket.ts). toUserId null means a team-wide
+// message (visible to everyone, broadcast to the team:<teamId> room);
+// toUserId set means a private DM between authorId and toUserId (broadcast
+// only to those two users' own user:<userId> rooms — see socket.ts).
 model Message {
   id        String   @id @default(uuid())
   body      String
@@ -243,9 +246,13 @@ model Message {
   team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   authorId String
-  author   User   @relation(fields: [authorId], references: [id])
+  author   User   @relation("MessageAuthor", fields: [authorId], references: [id])
+
+  toUserId String?
+  toUser   User?   @relation("MessageRecipient", fields: [toUserId], references: [id])
 
   @@index([teamId, createdAt])
+  @@index([teamId, authorId, toUserId])
 }
 
 model Attachment {

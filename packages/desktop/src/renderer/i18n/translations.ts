@@ -42,6 +42,10 @@ export const translations = {
     "chat.empty": "Hələ heç bir mesaj yoxdur.",
     "chat.loadError": "Mesajlar yüklənə bilmədi",
     "chat.sendFailed": "Mesaj göndərilə bilmədi",
+    "chat.mention": "Etiketlə",
+    "chat.mute": "Sustur",
+    "chat.unmute": "Sükutu aç",
+    "chat.directMessage": "Xüsusi mesaj",
 
     "auth.loginSubtitle": "Hesabına daxil ol",
     "auth.createSubtitle": "Komandan üçün yeni sahə yarat",
@@ -278,6 +282,10 @@ export const translations = {
     "chat.empty": "No messages yet.",
     "chat.loadError": "Couldn't load messages",
     "chat.sendFailed": "Couldn't send the message",
+    "chat.mention": "Mention",
+    "chat.mute": "Mute",
+    "chat.unmute": "Unmute",
+    "chat.directMessage": "Direct message",
 
     "auth.loginSubtitle": "Sign in to your account",
     "auth.createSubtitle": "Create a new space for your team",

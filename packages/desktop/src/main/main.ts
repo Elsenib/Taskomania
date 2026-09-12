@@ -5,8 +5,9 @@ import { registerFsHandlers } from "./ide/fsHandlers";
 import { registerPtyHandlers } from "./ide/ptyHandlers";
 import { registerDependencyScanner } from "./ide/dependencyScanner";
 import { registerLspHandlers } from "./ide/lspHandlers";
-import { registerTaskContextHandlers, type TaskContext } from "./ide/taskContext";
+import { registerTaskContextHandlers, type IdeSessionContext } from "./ide/taskContext";
 import { registerGoLiveHandlers } from "./ide/goLiveServer";
+import { registerChatHandlers } from "./ide/chatHandlers";
 
 const isDev = process.env.NODE_ENV === "development";
 const iconPath = path.join(__dirname, "../build/icon.png");
@@ -113,11 +114,13 @@ ipcMain.on("app-shutdown", () => {
 });
 
 // Opens the IDE as a separate window (see ide/ideWindow.ts for why it's not
-// just another view inside the main window). An optional TaskContext
-// (from TaskDetailModal's "Daxili IDE" choice) scopes the IDE's "Layihəni
-// tapşırığa saxla" action to that specific task — see ide/taskContext.ts.
-ipcMain.on("ide:open", (_event, taskContext?: TaskContext) => {
-  openIdeWindow(taskContext);
+// just another view inside the main window). Always carries the caller's
+// token/apiUrl/teamId/userId now (team chat needs them even without a
+// task); taskId is only set from TaskDetailModal's "Daxili IDE" choice,
+// scoping the "Layihəni tapşırığa saxla" action to that task — see
+// ide/taskContext.ts.
+ipcMain.on("ide:open", (_event, ctx: IdeSessionContext) => {
+  openIdeWindow(ctx);
 });
 
 app.whenReady().then(() => {
@@ -133,6 +136,7 @@ app.whenReady().then(() => {
   registerLspHandlers();
   registerTaskContextHandlers();
   registerGoLiveHandlers();
+  registerChatHandlers();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

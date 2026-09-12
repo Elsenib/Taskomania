@@ -1,7 +1,9 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
-import { useMessages, useSendMessage } from "../hooks/useMessages";
+import { useMessages, useSendMessage, useDirectMessages, useSendDirectMessage } from "../hooks/useMessages";
 import { useTeamMembers } from "../hooks/useTeamMembers";
+import { useUiStore } from "../store/uiStore";
+import { useMutedUsersStore } from "../store/mutedUsersStore";
 import { formatShortDateTime } from "../lib/formatDate";
 import { ApiError } from "../api/client";
 import { useT } from "../i18n/useT";
@@ -12,17 +14,40 @@ export default function ChatPanel({ onClose }: { onClose: () => void }) {
   const { user } = useAuth();
   const teamId = user?.teamId;
   const { data: members } = useTeamMembers(teamId ?? "");
-  const { data: messages, isLoading, isError } = useMessages(teamId);
-  const sendMessage = useSendMessage(teamId);
+  const activeThread = useUiStore((s) => s.activeChatThread);
+  const setActiveThread = useUiStore((s) => s.setActiveChatThread);
+  const isMuted = useMutedUsersStore((s) => s.isMuted);
+  const toggleMute = useMutedUsersStore((s) => s.toggleMute);
+
+  const isDm = activeThread !== "team";
+  const dmPartnerId = isDm ? activeThread : undefined;
+
+  const teamMessages = useMessages(teamId);
+  const dmMessages = useDirectMessages(teamId, dmPartnerId);
+  const { data: messages, isLoading, isError } = isDm ? dmMessages : teamMessages;
+
+  const sendTeamMessage = useSendMessage(teamId);
+  const sendDirectMessage = useSendDirectMessage(teamId, dmPartnerId);
+  const sendMessage = isDm ? sendDirectMessage : sendTeamMessage;
+
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [menuForUserId, setMenuForUserId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const membersById = new Map((members ?? []).map((m) => [m.id, m]));
+  const otherMembers = (members ?? []).filter((m) => m.id !== user?.id);
+  const menuMember = menuForUserId ? membersById.get(menuForUserId) : undefined;
+  const dmPartner = dmPartnerId ? membersById.get(dmPartnerId) : undefined;
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [messages?.length]);
+  }, [messages?.length, activeThread]);
+
+  useEffect(() => {
+    setError(null);
+  }, [activeThread]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -35,6 +60,17 @@ export default function ChatPanel({ onClose }: { onClose: () => void }) {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("chat.sendFailed"));
     }
+  }
+
+  function handleMention(member: { id: string; displayName: string }) {
+    setBody((b) => `${b}${b && !b.endsWith(" ") ? " " : ""}@${member.displayName} `);
+    setMenuForUserId(null);
+    inputRef.current?.focus();
+  }
+
+  function handleOpenDm(member: { id: string }) {
+    setActiveThread(member.id);
+    setMenuForUserId(null);
   }
 
   return (
@@ -59,21 +95,148 @@ export default function ChatPanel({ onClose }: { onClose: () => void }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "14px 16px",
+          gap: 8,
+          padding: "14px 64px 14px 16px",
           borderBottom: "1px solid var(--border)",
           flexShrink: 0,
         }}
       >
-        <h3 style={{ margin: 0, fontWeight: 600, fontSize: 15, color: "var(--ink)" }}>{t("chat.title")}</h3>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          {isDm && (
+            <button
+              type="button"
+              onClick={() => setActiveThread("team")}
+              aria-label={t("common.close")}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "var(--muted)",
+                cursor: "pointer",
+                padding: 2,
+                display: "flex",
+                flexShrink: 0,
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+          )}
+          <h3
+            style={{
+              margin: 0,
+              fontWeight: 600,
+              fontSize: 15,
+              color: "var(--ink)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {isDm ? dmPartner?.displayName ?? t("common.deletedUser") : t("chat.title")}
+          </h3>
+        </div>
         <button
           type="button"
           onClick={onClose}
           className="btn-secondary"
-          style={{ width: "auto", padding: "4px 10px", fontSize: 12 }}
+          style={{ width: "auto", padding: "4px 10px", fontSize: 12, flexShrink: 0 }}
         >
           {t("common.close")}
         </button>
       </div>
+
+      {!isDm && (
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            padding: "10px 16px",
+            borderBottom: "1px solid var(--border)",
+            overflowX: "auto",
+            flexShrink: 0,
+          }}
+        >
+          {otherMembers.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setMenuForUserId(m.id)}
+              title={m.displayName}
+              style={{
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                padding: 0,
+                flexShrink: 0,
+                opacity: isMuted(user!.id, m.id) ? 0.4 : 1,
+                position: "relative",
+              }}
+            >
+              <Avatar displayName={m.displayName} avatarUrl={m.avatarUrl} size={30} />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {menuMember && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "8px 16px",
+            borderBottom: "1px solid var(--border)",
+            background: "var(--paper)",
+            flexShrink: 0,
+            flexWrap: "wrap",
+          }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", marginRight: 2 }}>
+            {menuMember.displayName}
+          </span>
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ width: "auto", padding: "4px 8px", fontSize: 11 }}
+            onClick={() => handleMention(menuMember)}
+          >
+            {t("chat.mention")}
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ width: "auto", padding: "4px 8px", fontSize: 11 }}
+            onClick={() => toggleMute(user!.id, menuMember.id)}
+          >
+            {isMuted(user!.id, menuMember.id) ? t("chat.unmute") : t("chat.mute")}
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ width: "auto", padding: "4px 8px", fontSize: 11 }}
+            onClick={() => handleOpenDm(menuMember)}
+          >
+            {t("chat.directMessage")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMenuForUserId(null)}
+            aria-label={t("common.close")}
+            style={{
+              marginLeft: "auto",
+              border: "none",
+              background: "transparent",
+              color: "var(--muted)",
+              cursor: "pointer",
+              fontSize: 13,
+              padding: 2,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
         {isLoading && <div style={{ fontSize: 13, color: "var(--muted)" }}>{t("common.loading")}</div>}
@@ -116,6 +279,7 @@ export default function ChatPanel({ onClose }: { onClose: () => void }) {
         style={{ display: "flex", gap: 8, padding: "12px 16px", borderTop: "1px solid var(--border)", flexShrink: 0 }}
       >
         <input
+          ref={inputRef}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder={t("chat.placeholder")}

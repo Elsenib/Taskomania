@@ -79,6 +79,8 @@ export interface Message {
   id: string;
   teamId: string;
   authorId: string;
+  // null = team-wide message; set = a private DM to this user.
+  toUserId: string | null;
   body: string;
   createdAt: string;
 }

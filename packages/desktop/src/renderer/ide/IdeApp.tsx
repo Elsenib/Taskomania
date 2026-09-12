@@ -9,12 +9,14 @@ import {
   Minimize2,
   SquareTerminal,
   Globe,
+  MessageSquare,
 } from "lucide-react";
 import FileTree from "./FileTree";
 import EditorPane from "./EditorPane";
 import ImagePreview from "./ImagePreview";
 import TerminalPane from "./TerminalPane";
 import DependencyGraphPane from "./DependencyGraphPane";
+import IdeChatPanel from "./IdeChatPanel";
 import { getCodeOriginStats } from "./codeOriginTracker";
 import { isImageFile } from "../lib/fileKind";
 
@@ -71,6 +73,7 @@ export default function IdeApp() {
   // itself restarts (new project, or a shell switch), since a stale URL
   // could point at a server that's no longer running.
   const [devServerUrl, setDevServerUrl] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
   useEffect(() => setDevServerUrl(null), [projectRoot, terminalShell]);
 
   // The dependency graph is cramped inside the narrow sidebar — this lets it
@@ -379,6 +382,21 @@ export default function IdeApp() {
             onClick={() => setTerminalOpen((o) => !o)}
           >
             <SquareTerminal size={15} />
+          </button>
+          <button
+            className="btn-secondary"
+            title={chatOpen ? "Söhbəti bağla" : "Söhbət"}
+            aria-label="Söhbət"
+            style={{
+              width: "auto",
+              padding: "5px 8px",
+              display: "flex",
+              alignItems: "center",
+              color: chatOpen ? "var(--accent)" : undefined,
+            }}
+            onClick={() => setChatOpen((o) => !o)}
+          >
+            <MessageSquare size={15} />
           </button>
           <button
             className="btn-secondary"
@@ -810,6 +828,8 @@ export default function IdeApp() {
           </div>
         </div>
       )}
+
+      {chatOpen && <IdeChatPanel onClose={() => setChatOpen(false)} />}
     </div>
   );
 }

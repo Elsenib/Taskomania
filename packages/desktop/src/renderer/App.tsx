@@ -17,6 +17,7 @@ import ChatPanel from "./components/ChatPanel";
 import { useT } from "./i18n/useT";
 import { roleLabel } from "./lib/roleLabel";
 import { useUiStore } from "./store/uiStore";
+import { getToken, API_URL } from "./api/client";
 import ideIcon from "./assets/ide-icon.png";
 
 // Matches startup-animation.mp4's own length — the video should always play
@@ -152,7 +153,10 @@ export default function App() {
                 alignItems: "center",
                 justifyContent: "center",
               }}
-              onClick={() => window.teamTracker.openIde()}
+              onClick={() => {
+                const token = getToken();
+                if (token) window.teamTracker.openIde({ token, apiUrl: API_URL, teamId: user.teamId, userId: user.id });
+              }}
             >
               <img
                 src={ideIcon}

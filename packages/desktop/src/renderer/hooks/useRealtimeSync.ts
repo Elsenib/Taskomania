@@ -5,7 +5,8 @@ import { getSocket } from "../api/socket";
 import { useAuth } from "../auth/AuthContext";
 import { wasRecentlyMutatedByMe } from "./useTasks";
 import { notify } from "../lib/notify";
-import { useUiStore } from "../store/uiStore";
+import { useUiStore, type ChatThread } from "../store/uiStore";
+import { useMutedUsersStore } from "../store/mutedUsersStore";
 
 // Patches the React Query cache in place when another team member's app
 // broadcasts a change over the socket. REST + its own onSuccess already
@@ -17,6 +18,8 @@ export function useRealtimeSync(teamId: string) {
   const openTask = useUiStore((s) => s.openTask);
   const openChat = useUiStore((s) => s.openChat);
   const chatOpen = useUiStore((s) => s.chatOpen);
+  const activeChatThread = useUiStore((s) => s.activeChatThread);
+  const isMuted = useMutedUsersStore((s) => s.isMuted);
 
   useEffect(() => {
     const socket = getSocket();
@@ -142,6 +145,27 @@ export function useRealtimeSync(teamId: string) {
     };
 
     const onMessageCreated = (message: Message) => {
+      if (message.toUserId) {
+        // A DM's "conversation id" from this client's point of view is
+        // whichever of the two participants isn't me.
+        const otherUserId = message.authorId === user.id ? message.toUserId : message.authorId;
+        queryClient.setQueryData<{ messages: Message[] }>(
+          ["directMessages", teamId, otherUserId],
+          (old) => {
+            if (!old) return old;
+            if (old.messages.some((m) => m.id === message.id)) return old;
+            return { messages: [...old.messages, message] };
+          }
+        );
+
+        if (message.authorId === user.id) return;
+        const threadOpen = chatOpen && activeChatThread === otherUserId;
+        if (!threadOpen && !isMuted(user.id, message.authorId)) {
+          notify("Yeni xüsusi mesaj", message.body, () => openChat(otherUserId));
+        }
+        return;
+      }
+
       queryClient.setQueryData<{ messages: Message[] }>(["messages", message.teamId], (old) => {
         if (!old) return old;
         if (old.messages.some((m) => m.id === message.id)) return old;
@@ -149,8 +173,9 @@ export function useRealtimeSync(teamId: string) {
       });
 
       if (message.authorId === user.id) return;
-      if (!chatOpen) {
-        notify("Yeni mesaj", message.body, () => openChat());
+      const teamThreadOpen = chatOpen && activeChatThread === "team";
+      if (!teamThreadOpen && !isMuted(user.id, message.authorId)) {
+        notify("Yeni mesaj", message.body, () => openChat("team"));
       }
     };
 
@@ -261,5 +286,5 @@ export function useRealtimeSync(teamId: string) {
       socket.off("dependency:deleted", onDependencyDeleted);
       socket.off("team:deleted", onTeamDeleted);
     };
-  }, [teamId, queryClient, user, openTask, logout, switchTeam, openChat, chatOpen]);
+  }, [teamId, queryClient, user, openTask, logout, switchTeam, openChat, chatOpen, activeChatThread, isMuted]);
 }

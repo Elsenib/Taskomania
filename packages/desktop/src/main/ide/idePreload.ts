@@ -112,4 +112,22 @@ contextBridge.exposeInMainWorld("ideAPI", {
     ipcRenderer.on("lsp:downloadProgress", listener);
     return () => ipcRenderer.removeListener("lsp:downloadProgress", listener);
   },
+
+  // Team chat — all requests are mediated by the main process (see
+  // main/ide/chatHandlers.ts), the same "renderer never holds the token"
+  // rule as saveProjectToTask above. onChatMessage is the real-time push
+  // side, forwarded from the main process's own socket connection.
+  chatGetCurrentUserId: (): Promise<string> => ipcRenderer.invoke("chat:getCurrentUserId"),
+  chatListMembers: (): Promise<unknown[]> => ipcRenderer.invoke("chat:listMembers"),
+  chatListTeamMessages: (): Promise<unknown[]> => ipcRenderer.invoke("chat:listTeamMessages"),
+  chatSendTeamMessage: (body: string): Promise<unknown> => ipcRenderer.invoke("chat:sendTeamMessage", body),
+  chatListDirectMessages: (otherUserId: string): Promise<unknown[]> =>
+    ipcRenderer.invoke("chat:listDirectMessages", otherUserId),
+  chatSendDirectMessage: (otherUserId: string, body: string): Promise<unknown> =>
+    ipcRenderer.invoke("chat:sendDirectMessage", otherUserId, body),
+  onChatMessage: (callback: (message: unknown) => void) => {
+    const listener = (_event: unknown, message: unknown) => callback(message);
+    ipcRenderer.on("chat:message", listener);
+    return () => ipcRenderer.removeListener("chat:message", listener);
+  },
 });

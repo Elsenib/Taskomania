@@ -224,7 +224,14 @@ export default function TaskDetailModal({ teamId, task, newTaskColumnId, members
                 style={{ width: "auto", padding: "6px 12px" }}
                 onClick={() => {
                   const token = getToken();
-                  if (token) window.teamTracker.openIdeForTask(task!.id, token, API_URL);
+                  if (token && user)
+                    window.teamTracker.openIde({
+                      token,
+                      apiUrl: API_URL,
+                      teamId: user.teamId,
+                      userId: user.id,
+                      taskId: task!.id,
+                    });
                 }}
               >
                 {t("task.workInternalIde")}

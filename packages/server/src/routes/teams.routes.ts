@@ -20,7 +20,7 @@ import * as statsService from "../services/stats.service";
 import * as projectService from "../services/project.service";
 import * as messageService from "../services/message.service";
 import { AuthError } from "../services/auth.service";
-import { broadcastToTeam } from "../socket";
+import { broadcastToTeam, sendToUser } from "../socket";
 
 export const teamsRouter = Router();
 
@@ -319,7 +319,7 @@ teamsRouter.post("/:teamId/tasks", async (req, res) => {
 
 teamsRouter.get("/:teamId/messages", async (req, res) => {
   try {
-    const messages = await messageService.listMessages(req.params.teamId);
+    const messages = await messageService.listTeamMessages(req.params.teamId);
     res.json({ messages: messages.map(messageService.toPublicMessage) });
   } catch (err) {
     if (err instanceof AuthError) return res.status(err.status).json({ error: err.message });
@@ -333,9 +333,49 @@ teamsRouter.post("/:teamId/messages", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   try {
-    const message = await messageService.createMessage(req.params.teamId, req.auth!.userId, parsed.data.body);
+    const message = await messageService.createTeamMessage(req.params.teamId, req.auth!.userId, parsed.data.body);
     const publicMessage = messageService.toPublicMessage(message);
     broadcastToTeam(req.params.teamId, "message:created", publicMessage);
+    res.status(201).json({ message: publicMessage });
+  } catch (err) {
+    if (err instanceof AuthError) return res.status(err.status).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+teamsRouter.get("/:teamId/messages/dm/:userId", async (req, res) => {
+  try {
+    const messages = await messageService.listDirectMessages(
+      req.params.teamId,
+      req.auth!.userId,
+      req.params.userId
+    );
+    res.json({ messages: messages.map(messageService.toPublicMessage) });
+  } catch (err) {
+    if (err instanceof AuthError) return res.status(err.status).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+teamsRouter.post("/:teamId/messages/dm/:userId", async (req, res) => {
+  const parsed = createMessageSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  try {
+    const message = await messageService.createDirectMessage(
+      req.params.teamId,
+      req.auth!.userId,
+      req.params.userId,
+      parsed.data.body
+    );
+    const publicMessage = messageService.toPublicMessage(message);
+    // Never broadcastToTeam here — a DM must only reach the two participants.
+    sendToUser(req.auth!.userId, "message:created", publicMessage);
+    if (req.params.userId !== req.auth!.userId) {
+      sendToUser(req.params.userId, "message:created", publicMessage);
+    }
     res.status(201).json({ message: publicMessage });
   } catch (err) {
     if (err instanceof AuthError) return res.status(err.status).json({ error: err.message });

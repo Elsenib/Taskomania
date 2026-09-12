@@ -17,6 +17,7 @@ export function createSocketServer(httpServer: HttpServer): SocketIOServer {
     try {
       const payload = jwt.verify(token, secret) as AuthPayload;
       socket.data.teamId = payload.teamId;
+      socket.data.userId = payload.userId;
       next();
     } catch {
       next(new Error("Unauthorized"));
@@ -25,7 +26,11 @@ export function createSocketServer(httpServer: HttpServer): SocketIOServer {
 
   io.on("connection", (socket) => {
     const teamId = socket.data.teamId as string;
+    const userId = socket.data.userId as string;
     socket.join(`team:${teamId}`);
+    // Lets a DM reach every one of this user's own open sessions/devices
+    // (see sendToUser below) without broadcasting it to the whole team.
+    socket.join(`user:${userId}`);
   });
 
   return io;
@@ -37,4 +42,10 @@ export function createSocketServer(httpServer: HttpServer): SocketIOServer {
 // source of truth.
 export function broadcastToTeam(teamId: string, event: string, payload: unknown) {
   io?.to(`team:${teamId}`).emit(event, payload);
+}
+
+// For a private DM: reaches only the two participants (every session/device
+// each of them has open), never the rest of the team.
+export function sendToUser(userId: string, event: string, payload: unknown) {
+  io?.to(`user:${userId}`).emit(event, payload);
 }

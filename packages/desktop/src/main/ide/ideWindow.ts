@@ -2,9 +2,10 @@ import { BrowserWindow } from "electron";
 import path from "path";
 import { killAllPtySessions } from "./ptyHandlers";
 import { killAllLspSessions } from "./lspHandlers";
-import { setTaskContext, type TaskContext } from "./taskContext";
+import { setTaskContext, type IdeSessionContext } from "./taskContext";
 import { killGoLiveServer } from "./goLiveServer";
 import { stopWatching } from "./fsHandlers";
+import { startChatSession, stopChatSession } from "./chatHandlers";
 
 const isDev = process.env.NODE_ENV === "development";
 const iconPath = path.join(__dirname, "../../build/icon.png");
@@ -19,11 +20,12 @@ let ideWindow: BrowserWindow | null = null;
 // never shares localStorage/cookies (hence the JWT token) with this window —
 // so a hypothetical XSS in the Board simply has no path to the terminal or
 // disk, regardless of how carefully the rest of the code is written.
-export function openIdeWindow(taskContext?: TaskContext) {
+export function openIdeWindow(sessionContext: IdeSessionContext) {
   // Always (re-)apply, even when reusing an already-open window — opening
   // "for" a different task, or opening plain after a task-scoped session,
   // should retarget which task "Layihəni tapşırığa saxla" uploads to.
-  setTaskContext(taskContext ?? null);
+  setTaskContext(sessionContext);
+  startChatSession(sessionContext, () => ideWindow);
 
   if (ideWindow && !ideWindow.isDestroyed()) {
     ideWindow.show();
@@ -64,6 +66,7 @@ export function openIdeWindow(taskContext?: TaskContext) {
     killAllLspSessions();
     killGoLiveServer();
     stopWatching();
+    stopChatSession();
     setTaskContext(null);
     ideWindow = null;
   });

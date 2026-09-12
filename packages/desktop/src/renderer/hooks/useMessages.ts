@@ -22,3 +22,26 @@ export function useSendMessage(teamId: string | undefined) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["messages", teamId] }),
   });
 }
+
+export function useDirectMessages(teamId: string | undefined, otherUserId: string | undefined) {
+  return useQuery({
+    queryKey: ["directMessages", teamId, otherUserId],
+    queryFn: () =>
+      apiFetch<{ messages: Message[] }>(`/api/v1/teams/${teamId}/messages/dm/${otherUserId}`),
+    select: (res) => res.messages,
+    enabled: Boolean(teamId) && Boolean(otherUserId),
+  });
+}
+
+export function useSendDirectMessage(teamId: string | undefined, otherUserId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: string) =>
+      apiFetch<{ message: Message }>(`/api/v1/teams/${teamId}/messages/dm/${otherUserId}`, {
+        method: "POST",
+        body: { body },
+      }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["directMessages", teamId, otherUserId] }),
+  });
+}
