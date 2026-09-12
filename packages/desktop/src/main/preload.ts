@@ -21,4 +21,7 @@ contextBridge.exposeInMainWorld("teamTracker", {
   // scoping its "Layihəni tapşırığa saxla" button to that task.
   openIde: (ctx: { token: string; apiUrl: string; teamId: string; userId: string; taskId?: string }) =>
     ipcRenderer.send("ide:open", ctx),
+  // See lib/badgeIcon.ts — the renderer draws the badge image, this just
+  // hands the finished data: URL to the window that owns the taskbar icon.
+  setUnreadBadge: (dataUrl: string | null) => ipcRenderer.send("app:setUnreadBadge", dataUrl),
 });

@@ -4,6 +4,7 @@ import { useMessages, useSendMessage, useDirectMessages, useSendDirectMessage } 
 import { useTeamMembers } from "../hooks/useTeamMembers";
 import { useUiStore } from "../store/uiStore";
 import { useMutedUsersStore } from "../store/mutedUsersStore";
+import { useChatUnreadStore, formatBadgeCount } from "../store/chatUnreadStore";
 import { formatShortDateTime } from "../lib/formatDate";
 import { ApiError } from "../api/client";
 import { useT } from "../i18n/useT";
@@ -18,6 +19,13 @@ export default function ChatPanel({ onClose }: { onClose: () => void }) {
   const setActiveThread = useUiStore((s) => s.setActiveChatThread);
   const isMuted = useMutedUsersStore((s) => s.isMuted);
   const toggleMute = useMutedUsersStore((s) => s.toggleMute);
+  const unreadByUser = useChatUnreadStore((s) => s.unreadByUser);
+  const clearTeamUnread = useChatUnreadStore((s) => s.clearTeam);
+  const clearUserUnread = useChatUnreadStore((s) => s.clearUser);
+  // Mute/etiketlə/DM are all available from a member's profile menu, but
+  // muting is admin/mentor-only by design — a plain member can still
+  // mention or DM anyone, just not silence them.
+  const canModerate = user?.role === "ADMIN" || user?.role === "MENTOR";
 
   const isDm = activeThread !== "team";
   const dmPartnerId = isDm ? activeThread : undefined;
@@ -48,6 +56,13 @@ export default function ChatPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     setError(null);
   }, [activeThread]);
+
+  // Entering a thread (opening the panel onto it, or switching to it) is
+  // what "read" means here — see chatUnreadStore's comment.
+  useEffect(() => {
+    if (activeThread === "team") clearTeamUnread();
+    else clearUserUnread(activeThread);
+  }, [activeThread, clearTeamUnread, clearUserUnread]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -174,6 +189,29 @@ export default function ChatPanel({ onClose }: { onClose: () => void }) {
               }}
             >
               <Avatar displayName={m.displayName} avatarUrl={m.avatarUrl} size={30} />
+              {(unreadByUser[m.id] ?? 0) > 0 && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -4,
+                    right: -4,
+                    minWidth: 15,
+                    height: 15,
+                    padding: "0 3px",
+                    borderRadius: 8,
+                    background: "var(--priority-high-ink)",
+                    color: "white",
+                    fontSize: 9.5,
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    lineHeight: 1,
+                  }}
+                >
+                  {formatBadgeCount(unreadByUser[m.id])}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -203,14 +241,16 @@ export default function ChatPanel({ onClose }: { onClose: () => void }) {
           >
             {t("chat.mention")}
           </button>
-          <button
-            type="button"
-            className="btn-secondary"
-            style={{ width: "auto", padding: "4px 8px", fontSize: 11 }}
-            onClick={() => toggleMute(user!.id, menuMember.id)}
-          >
-            {isMuted(user!.id, menuMember.id) ? t("chat.unmute") : t("chat.mute")}
-          </button>
+          {canModerate && (
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ width: "auto", padding: "4px 8px", fontSize: 11 }}
+              onClick={() => toggleMute(user!.id, menuMember.id)}
+            >
+              {isMuted(user!.id, menuMember.id) ? t("chat.unmute") : t("chat.mute")}
+            </button>
+          )}
           <button
             type="button"
             className="btn-secondary"

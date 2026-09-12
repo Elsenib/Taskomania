@@ -1,6 +1,30 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { Message, User } from "@team-tracker/shared";
 
+function UnreadBadge({ count }: { count: number }) {
+  return (
+    <span
+      style={{
+        minWidth: 18,
+        height: 18,
+        padding: "0 5px",
+        borderRadius: 9,
+        background: "var(--priority-high-ink)",
+        color: "white",
+        fontSize: 10.5,
+        fontWeight: 700,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        lineHeight: 1,
+        flexShrink: 0,
+      }}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
 // Team chat inside the IDE window. Unlike the Board's ChatPanel, this never
 // talks to the API or a socket directly — the IDE renderer never holds the
 // JWT (see main/ide/taskContext.ts's comment); every call here goes through
@@ -20,6 +44,8 @@ export default function IdeChatPanel({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+  const [unreadTeam, setUnreadTeam] = useState(0);
+  const [unreadByUser, setUnreadByUser] = useState<Record<string, number>>({});
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -32,21 +58,41 @@ export default function IdeChatPanel({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     return window.ideAPI?.onChatMessage((message) => {
-      setMessages((old) => {
-        if (!old) return old;
-        const belongsToThread =
-          activeThread === "team"
-            ? !message.toUserId
-            : message.toUserId &&
-              (message.authorId === activeThread || message.toUserId === activeThread) &&
-              (message.authorId === currentUserId || message.toUserId === currentUserId);
-        if (!belongsToThread) return old;
-        if (old.some((m) => m.id === message.id)) return old;
-        return [...old, message];
-      });
+      const belongsToThread =
+        activeThread === "team"
+          ? !message.toUserId
+          : message.toUserId &&
+            (message.authorId === activeThread || message.toUserId === activeThread) &&
+            (message.authorId === currentUserId || message.toUserId === currentUserId);
+
+      if (belongsToThread) {
+        setMessages((old) => {
+          if (!old) return old;
+          if (old.some((m) => m.id === message.id)) return old;
+          return [...old, message];
+        });
+        return;
+      }
+
+      // Doesn't belong to whatever's open right now (or nothing's open) —
+      // bump that thread's badge instead. Never for my own messages, and
+      // never for a DM I'm not part of (a push I'd only get if I were).
+      if (message.authorId === currentUserId) return;
+      if (!message.toUserId) {
+        setUnreadTeam((n) => n + 1);
+      } else {
+        const otherUserId = message.authorId === currentUserId ? message.toUserId : message.authorId;
+        setUnreadByUser((old) => ({ ...old, [otherUserId]: (old[otherUserId] ?? 0) + 1 }));
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeThread, currentUserId]);
+
+  // Entering a thread is "read" — same convention as the Board's ChatPanel.
+  useEffect(() => {
+    if (activeThread === "team") setUnreadTeam(0);
+    else if (activeThread) setUnreadByUser((old) => ({ ...old, [activeThread]: 0 }));
+  }, [activeThread]);
 
   useEffect(() => {
     if (!activeThread) return;
@@ -201,7 +247,8 @@ export default function IdeChatPanel({ onClose }: { onClose: () => void }) {
             >
               #
             </span>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Komanda söhbəti</span>
+            <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>Komanda söhbəti</span>
+            {unreadTeam > 0 && <UnreadBadge count={unreadTeam} />}
           </button>
 
           {otherMembers.map((m) => (
@@ -249,7 +296,8 @@ export default function IdeChatPanel({ onClose }: { onClose: () => void }) {
                   {m.displayName.slice(0, 1).toUpperCase()}
                 </span>
               )}
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{m.displayName}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{m.displayName}</span>
+              {(unreadByUser[m.id] ?? 0) > 0 && <UnreadBadge count={unreadByUser[m.id]} />}
             </button>
           ))}
 
@@ -272,28 +320,64 @@ export default function IdeChatPanel({ onClose }: { onClose: () => void }) {
               const author = membersById.get(m.authorId);
               const mine = m.authorId === currentUserId;
               return (
-                <div key={m.id} style={{ marginBottom: 10, textAlign: mine ? "right" : "left" }}>
-                  {!mine && (
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", marginBottom: 2 }}>
-                      {author?.displayName ?? "Silinmiş istifadəçi"}
-                    </div>
-                  )}
-                  <span
-                    style={{
-                      display: "inline-block",
-                      maxWidth: "85%",
-                      padding: "6px 10px",
-                      borderRadius: 10,
-                      fontSize: 13,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                      background: mine ? "var(--accent)" : "var(--paper-panel)",
-                      color: mine ? "white" : "var(--ink)",
-                      textAlign: "left",
-                    }}
-                  >
-                    {m.body}
-                  </span>
+                <div
+                  key={m.id}
+                  style={{
+                    display: "flex",
+                    flexDirection: mine ? "row-reverse" : "row",
+                    gap: 8,
+                    marginBottom: 10,
+                    alignItems: "flex-end",
+                  }}
+                >
+                  {!mine &&
+                    (author?.avatarUrl ? (
+                      <img
+                        src={author.avatarUrl}
+                        alt=""
+                        style={{ width: 22, height: 22, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+                      />
+                    ) : (
+                      <span
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: "50%",
+                          background: "var(--accent)",
+                          color: "white",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {(author?.displayName ?? "?").slice(0, 1).toUpperCase()}
+                      </span>
+                    ))}
+                  <div style={{ minWidth: 0, maxWidth: "78%" }}>
+                    {!mine && (
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", marginBottom: 2 }}>
+                        {author?.displayName ?? "Silinmiş istifadəçi"}
+                      </div>
+                    )}
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "6px 10px",
+                        borderRadius: 10,
+                        fontSize: 13,
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                        background: mine ? "var(--accent)" : "var(--paper-panel)",
+                        color: mine ? "white" : "var(--ink)",
+                        textAlign: "left",
+                      }}
+                    >
+                      {m.body}
+                    </span>
+                  </div>
                 </div>
               );
             })}

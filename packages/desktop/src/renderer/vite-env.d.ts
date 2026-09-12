@@ -18,6 +18,7 @@ declare global {
       sleepApp(): void;
       shutdownApp(): void;
       openIde(ctx: { token: string; apiUrl: string; teamId: string; userId: string; taskId?: string }): void;
+      setUnreadBadge(dataUrl: string | null): void;
     };
     // Only present in the separate IDE window (see main/ide/idePreload.ts) —
     // undefined in the main Board window, which is how main.tsx decides which

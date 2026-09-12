@@ -123,6 +123,20 @@ ipcMain.on("ide:open", (_event, ctx: IdeSessionContext) => {
   openIdeWindow(ctx);
 });
 
+// Windows taskbar-icon badge (the little red count bubble, same idea as
+// Slack/Discord) for unread chat messages. The renderer draws the badge
+// itself (canvas → data: URL, see lib/badgeIcon.ts) since it has a DOM;
+// this just turns that image into a nativeImage and hands it to the
+// window. null clears it back to the plain app icon.
+ipcMain.on("app:setUnreadBadge", (_event, dataUrl: string | null) => {
+  if (!mainWindow) return;
+  if (!dataUrl) {
+    mainWindow.setOverlayIcon(null, "");
+    return;
+  }
+  mainWindow.setOverlayIcon(nativeImage.createFromDataURL(dataUrl), "Oxunmamış mesajlar");
+});
+
 app.whenReady().then(() => {
   // No default "File Edit View Window Help" menu bar — the app runs
   // fullscreen/kiosk-style with its own in-app controls only.
